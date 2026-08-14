@@ -1,0 +1,303 @@
+-- =============================================
+-- BASE DE DATOS PARA KIERT
+-- Con datos de ejemplo (contraseña: Password1)
+-- =============================================
+drop database kiert_db;
+CREATE DATABASE IF NOT EXISTS kiert_db;
+USE kiert_db;
+
+-- =============================================
+-- TABLA: usuarios
+-- =============================================
+CREATE TABLE usuarios (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre_usuario VARCHAR(20) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    foto_perfil_url VARCHAR(500),
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    INDEX idx_email (email),
+    INDEX idx_nombre_usuario (nombre_usuario),
+    INDEX idx_activo (activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: password_reset_tokens
+-- =============================================
+CREATE TABLE password_reset_tokens (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    token VARCHAR(36) NOT NULL UNIQUE,
+    usuario_id BIGINT NOT NULL,
+    fecha_expiracion TIMESTAMP NOT NULL,
+    usado BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_token (token),
+    INDEX idx_usuario_id (usuario_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: posts (CON SOFT DELETE)
+-- =============================================
+CREATE TABLE posts (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    autor_id BIGINT NOT NULL,
+    titulo VARCHAR(120) NOT NULL,
+    descripcion TEXT NOT NULL,
+    categoria VARCHAR(20) NOT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion TIMESTAMP NULL DEFAULT NULL,
+    eliminado BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_autor_id (autor_id),
+    INDEX idx_categoria (categoria),
+    INDEX idx_fecha_creacion (fecha_creacion DESC),
+    INDEX idx_eliminado (eliminado),
+    INDEX idx_fecha_eliminacion (fecha_eliminacion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: adjuntos
+-- =============================================
+CREATE TABLE adjuntos (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id BIGINT NOT NULL,
+    tipo VARCHAR(10) NOT NULL,
+    nombre VARCHAR(255) NOT NULL,
+    url VARCHAR(1000) NOT NULL,
+    peso_kb INT,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: comentarios
+-- =============================================
+CREATE TABLE comentarios (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id BIGINT NOT NULL,
+    autor_id BIGINT NOT NULL,
+    contenido TEXT NOT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion TIMESTAMP NULL DEFAULT NULL,
+    eliminado BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id),
+    INDEX idx_autor_id (autor_id),
+    INDEX idx_fecha_creacion (fecha_creacion ASC),
+    INDEX idx_eliminado (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: mensajes
+-- =============================================
+CREATE TABLE mensajes (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id BIGINT NOT NULL,
+    receptor_id BIGINT NOT NULL,
+    contenido TEXT NOT NULL,
+    fecha_envio TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leido BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_eliminacion TIMESTAMP NULL DEFAULT NULL,
+    eliminado BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (emisor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_emisor_receptor (emisor_id, receptor_id),
+    INDEX idx_receptor_leido (receptor_id, leido),
+    INDEX idx_fecha_envio (fecha_envio DESC),
+    INDEX idx_eliminado (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: solicitudes_contacto
+-- =============================================
+CREATE TABLE solicitudes_contacto (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id BIGINT NOT NULL,
+    receptor_id BIGINT NOT NULL,
+    estado VARCHAR(10) NOT NULL DEFAULT 'PENDIENTE',
+    fecha_solicitud TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (emisor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_emisor_receptor (emisor_id, receptor_id),
+    INDEX idx_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- DATOS DE EJEMPLO (contraseña: Password1)
+-- =============================================
+
+-- Usuarios de ejemplo
+INSERT INTO usuarios (id, nombre_usuario, email, password_hash, foto_perfil_url, fecha_creacion) VALUES
+  (1, 'admin_kiert', 'admin@kiert.com', '$2a$10$7EqJtq98hPqEX7fNZaFWoOe6D0KcTvVQyKG3q3F.68f1M6XPfEfyi', NULL, CURRENT_TIMESTAMP),
+  (2, 'root_ana', 'ana@kiert.com', '$2a$10$7EqJtq98hPqEX7fNZaFWoOe6D0KcTvVQyKG3q3F.68f1M6XPfEfyi', NULL, CURRENT_TIMESTAMP),
+  (3, 'kai_dev', 'kai@kiert.com', '$2a$10$7EqJtq98hPqEX7fNZaFWoOe6D0KcTvVQyKG3q3F.68f1M6XPfEfyi', NULL, CURRENT_TIMESTAMP);
+
+-- Posts de ejemplo
+INSERT INTO posts (id, autor_id, titulo, descripcion, categoria, fecha_creacion) VALUES
+  (1, 2, 'Detecté un phishing dirigido a mi empresa',
+      'Recibi un correo que suplantaba a mi banco pidiendo actualizar datos. Comparto los headers y como lo identifique.',
+      'CASO_HACKING', CURRENT_TIMESTAMP),
+  (2, 3, 'Perdi acceso a mi cuenta de correo, como recupero todo?',
+      'Me cambiaron la contrasena sin avisarme. Ya reporte al proveedor pero no se que mas hacer mientras espero respuesta.',
+      'AYUDA', CURRENT_TIMESTAMP);
+
+-- Adjuntos de ejemplo
+INSERT INTO adjuntos (id, post_id, tipo, nombre, url, peso_kb) VALUES
+  (1, 1, 'LINK', 'Analisis en VirusTotal', 'https://virustotal.com', NULL);
+
+-- Comentarios de ejemplo
+INSERT INTO comentarios (id, post_id, autor_id, contenido, fecha_creacion) VALUES
+  (1, 1, 3, 'Te recomiendo tambien reportarlo a PhishTank, ayuda a que se bloquee mas rapido.', CURRENT_TIMESTAMP);
+
+-- =============================================
+-- RESETEAR SECUENCIAS
+-- =============================================
+
+ALTER TABLE usuarios AUTO_INCREMENT = 4;
+ALTER TABLE posts AUTO_INCREMENT = 3;
+ALTER TABLE adjuntos AUTO_INCREMENT = 2;
+ALTER TABLE comentarios AUTO_INCREMENT = 2;
+ALTER TABLE mensajes AUTO_INCREMENT = 1;
+ALTER TABLE solicitudes_contacto AUTO_INCREMENT = 1;
+
+-- =============================================
+-- CONSULTAS ÚTILES
+-- =============================================
+
+-- 1. Ver todos los usuarios
+SELECT * FROM usuarios;
+
+-- 2. Ver todos los posts con sus autores (solo no eliminados)
+SELECT 
+    p.id,
+    p.titulo,
+    p.descripcion,
+    p.categoria,
+    p.fecha_creacion,
+    p.fecha_actualizacion,
+    p.fecha_eliminacion,
+    u.nombre_usuario AS autor_nombre,
+    u.foto_perfil_url AS autor_foto
+FROM posts p
+JOIN usuarios u ON p.autor_id = u.id
+WHERE p.eliminado = FALSE
+ORDER BY p.fecha_creacion DESC;
+
+-- 3. Ver posts eliminados (para auditoría)
+SELECT 
+    p.id,
+    p.titulo,
+    u.nombre_usuario AS autor_nombre,
+    p.fecha_eliminacion
+FROM posts p
+JOIN usuarios u ON p.autor_id = u.id
+WHERE p.eliminado = TRUE
+ORDER BY p.fecha_eliminacion DESC;
+
+-- 4. Ver publicaciones de un usuario específico (ID 2)
+SELECT 
+    p.id,
+    p.titulo,
+    p.descripcion,
+    p.categoria,
+    p.fecha_creacion,
+    COUNT(c.id) AS total_comentarios
+FROM posts p
+LEFT JOIN comentarios c ON p.id = c.post_id AND c.eliminado = FALSE
+WHERE p.autor_id = 2 AND p.eliminado = FALSE
+GROUP BY p.id
+ORDER BY p.fecha_creacion DESC;
+
+-- 5. Ver posts con estadísticas (comentarios y adjuntos)
+SELECT 
+    p.id,
+    p.titulo,
+    u.nombre_usuario AS autor,
+    COUNT(DISTINCT a.id) AS total_adjuntos,
+    COUNT(DISTINCT c.id) AS total_comentarios,
+    p.fecha_creacion
+FROM posts p
+JOIN usuarios u ON p.autor_id = u.id
+LEFT JOIN adjuntos a ON p.id = a.post_id
+LEFT JOIN comentarios c ON p.id = c.post_id AND c.eliminado = FALSE
+WHERE p.eliminado = FALSE
+GROUP BY p.id
+ORDER BY p.fecha_creacion DESC;
+
+-- 6. Ver todos los comentarios con sus autores
+SELECT 
+    c.id,
+    c.contenido,
+    c.fecha_creacion,
+    u.nombre_usuario AS autor_nombre,
+    p.titulo AS post_titulo
+FROM comentarios c
+JOIN usuarios u ON c.autor_id = u.id
+JOIN posts p ON c.post_id = p.id
+WHERE c.eliminado = FALSE
+ORDER BY c.fecha_creacion DESC;
+
+-- 7. Ver actividad de un usuario (posts + comentarios)
+SELECT 
+    'POST' AS tipo,
+    p.id AS id,
+    p.titulo AS contenido,
+    p.fecha_creacion AS fecha
+FROM posts p
+WHERE p.autor_id = 2 AND p.eliminado = FALSE
+UNION ALL
+SELECT 
+    'COMENTARIO' AS tipo,
+    c.id AS id,
+    c.contenido AS contenido,
+    c.fecha_creacion AS fecha
+FROM comentarios c
+WHERE c.autor_id = 2 AND c.eliminado = FALSE
+ORDER BY fecha DESC;
+
+-- 8. Contar publicaciones por usuario
+SELECT 
+    u.id,
+    u.nombre_usuario,
+    COUNT(p.id) AS total_publicaciones
+FROM usuarios u
+LEFT JOIN posts p ON u.id = p.autor_id AND p.eliminado = FALSE
+GROUP BY u.id
+ORDER BY total_publicaciones DESC;
+
+-- 9. Ver mensajes entre dos usuarios (ejemplo: 1 y 2)
+SELECT 
+    m.id,
+    u1.nombre_usuario AS emisor,
+    u2.nombre_usuario AS receptor,
+    m.contenido,
+    m.fecha_envio,
+    m.leido
+FROM mensajes m
+JOIN usuarios u1 ON m.emisor_id = u1.id
+JOIN usuarios u2 ON m.receptor_id = u2.id
+WHERE (m.emisor_id = 1 AND m.receptor_id = 2)
+   OR (m.emisor_id = 2 AND m.receptor_id = 1)
+   AND m.eliminado = FALSE
+ORDER BY m.fecha_envio ASC;
+
+-- 10. Ver solicitudes de contacto pendientes
+SELECT 
+    s.id,
+    u1.nombre_usuario AS emisor,
+    u2.nombre_usuario AS receptor,
+    s.fecha_solicitud,
+    s.estado
+FROM solicitudes_contacto s
+JOIN usuarios u1 ON s.emisor_id = u1.id
+JOIN usuarios u2 ON s.receptor_id = u2.id
+WHERE s.estado = 'PENDIENTE'
+ORDER BY s.fecha_solicitud DESC;
