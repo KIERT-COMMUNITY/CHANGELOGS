@@ -1,0 +1,319 @@
+-- =============================================
+-- BASE DE DATOS PARA KIERT
+-- Con datos de ejemplo (contraseña: Password1)
+-- =============================================
+DROP DATABASE IF EXISTS kiert_db;
+CREATE DATABASE IF NOT EXISTS kiert_db;
+USE kiert_db;
+
+-- =============================================
+-- TABLA: usuarios
+-- =============================================
+CREATE TABLE usuarios (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre_usuario VARCHAR(20) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    foto_perfil_url VARCHAR(500),
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    INDEX idx_email (email),
+    INDEX idx_nombre_usuario (nombre_usuario),
+    INDEX idx_activo (activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: password_reset_tokens
+-- =============================================
+CREATE TABLE password_reset_tokens (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    token VARCHAR(36) NOT NULL UNIQUE,
+    usuario_id BIGINT NOT NULL,
+    fecha_expiracion TIMESTAMP NOT NULL,
+    usado BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_token (token),
+    INDEX idx_usuario_id (usuario_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: posts (CON SOFT DELETE)
+-- =============================================
+CREATE TABLE posts (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    autor_id BIGINT NOT NULL,
+    titulo VARCHAR(120) NOT NULL,
+    descripcion TEXT NOT NULL,
+    categoria VARCHAR(20) NOT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion TIMESTAMP NULL DEFAULT NULL,
+    eliminado BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_autor_id (autor_id),
+    INDEX idx_categoria (categoria),
+    INDEX idx_fecha_creacion (fecha_creacion DESC),
+    INDEX idx_eliminado (eliminado),
+    INDEX idx_fecha_eliminacion (fecha_eliminacion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: adjuntos
+-- =============================================
+CREATE TABLE adjuntos (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id BIGINT NOT NULL,
+    tipo VARCHAR(10) NOT NULL,
+    nombre VARCHAR(255) NOT NULL,
+    url VARCHAR(1000) NOT NULL,
+    peso_kb INT,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: comentarios
+-- =============================================
+CREATE TABLE comentarios (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id BIGINT NOT NULL,
+    autor_id BIGINT NOT NULL,
+    contenido TEXT NOT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion TIMESTAMP NULL DEFAULT NULL,
+    eliminado BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id),
+    INDEX idx_autor_id (autor_id),
+    INDEX idx_fecha_creacion (fecha_creacion ASC),
+    INDEX idx_eliminado (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: mensajes (CHAT)
+-- =============================================
+CREATE TABLE mensajes (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id BIGINT NOT NULL,
+    receptor_id BIGINT NOT NULL,
+    contenido TEXT NOT NULL,
+    fecha_envio TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leido BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_leido TIMESTAMP NULL DEFAULT NULL,
+    fecha_eliminacion TIMESTAMP NULL DEFAULT NULL,
+    eliminado BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (emisor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_emisor_receptor (emisor_id, receptor_id),
+    INDEX idx_receptor_leido (receptor_id, leido),
+    INDEX idx_fecha_envio (fecha_envio DESC),
+    INDEX idx_eliminado (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: solicitudes_contacto (SOLICITUDES DE AMISTAD)
+-- =============================================
+CREATE TABLE solicitudes_contacto (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id BIGINT NOT NULL,
+    receptor_id BIGINT NOT NULL,
+    estado VARCHAR(10) NOT NULL DEFAULT 'PENDIENTE',
+    mensaje VARCHAR(255) NULL,
+    fecha_solicitud TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (emisor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_emisor_receptor (emisor_id, receptor_id),
+    INDEX idx_estado (estado),
+    INDEX idx_fecha_solicitud (fecha_solicitud DESC),
+    UNIQUE KEY uk_solicitud_unica (emisor_id, receptor_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================
+-- TABLA: reacciones
+-- =============================================
+CREATE TABLE reacciones (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id BIGINT NOT NULL,
+    post_id BIGINT NULL,
+    comentario_id BIGINT NULL,
+    tipo VARCHAR(10) NOT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (comentario_id) REFERENCES comentarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_post (usuario_id, post_id),
+    UNIQUE KEY uk_usuario_comentario (usuario_id, comentario_id),
+    INDEX idx_usuario_id (usuario_id),
+    INDEX idx_post_id (post_id),
+    INDEX idx_comentario_id (comentario_id),
+    INDEX idx_tipo (tipo),
+    CONSTRAINT chk_post_o_comentario CHECK (
+        (post_id IS NOT NULL AND comentario_id IS NULL) OR
+        (post_id IS NULL AND comentario_id IS NOT NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+-- =============================================
+-- MENSAJES DE CHAT DE EJEMPLO
+-- =============================================
+
+
+-- =============================================
+-- RESETEAR SECUENCIAS
+-- =============================================
+select * from solicitudes_contacto;
+ALTER TABLE usuarios AUTO_INCREMENT = 4;
+ALTER TABLE posts AUTO_INCREMENT = 3;
+ALTER TABLE adjuntos AUTO_INCREMENT = 2;
+ALTER TABLE comentarios AUTO_INCREMENT = 2;
+ALTER TABLE mensajes AUTO_INCREMENT = 1;
+ALTER TABLE solicitudes_contacto AUTO_INCREMENT = 1;
+ALTER TABLE reacciones AUTO_INCREMENT = 1;
+select * from reacciones;
+-- =============================================
+-- CONSULTAS ÚTILES
+-- =============================================
+
+-- 1. Ver todas las solicitudes de contacto
+SELECT 
+    s.id,
+    e.nombre_usuario AS emisor,
+    r.nombre_usuario AS receptor,
+    s.estado,
+    s.mensaje,
+    s.fecha_solicitud,
+    s.fecha_respuesta
+FROM solicitudes_contacto s
+JOIN usuarios e ON s.emisor_id = e.id
+JOIN usuarios r ON s.receptor_id = r.id
+ORDER BY s.fecha_solicitud DESC;
+
+-- 2. Ver solicitudes pendientes de un usuario específico (ID 1)
+SELECT 
+    s.id,
+    e.nombre_usuario AS emisor,
+    e.foto_perfil_url,
+    s.mensaje,
+    s.fecha_solicitud
+FROM solicitudes_contacto s
+JOIN usuarios e ON s.emisor_id = e.id
+WHERE s.receptor_id = 1 AND s.estado = 'PENDIENTE'
+ORDER BY s.fecha_solicitud DESC;
+
+-- 3. Ver contactos aceptados de un usuario (ID 2)
+SELECT 
+    CASE 
+        WHEN s.emisor_id = 2 THEN r.nombre_usuario
+        WHEN s.receptor_id = 2 THEN e.nombre_usuario
+    END AS contacto,
+    CASE 
+        WHEN s.emisor_id = 2 THEN r.foto_perfil_url
+        WHEN s.receptor_id = 2 THEN e.foto_perfil_url
+    END AS foto_perfil,
+    s.fecha_respuesta
+FROM solicitudes_contacto s
+JOIN usuarios e ON s.emisor_id = e.id
+JOIN usuarios r ON s.receptor_id = r.id
+WHERE (s.emisor_id = 2 OR s.receptor_id = 2) AND s.estado = 'ACEPTADA'
+ORDER BY s.fecha_respuesta DESC;
+
+-- 4. Ver conversación entre dos usuarios (ej: 2 y 3)
+SELECT 
+    m.id,
+    u.nombre_usuario AS emisor,
+    m.contenido,
+    m.fecha_envio,
+    CASE WHEN m.leido = TRUE THEN 'Leído' ELSE 'No leído' END AS estado
+FROM mensajes m
+JOIN usuarios u ON m.emisor_id = u.id
+WHERE (m.emisor_id = 2 AND m.receptor_id = 3) OR (m.emisor_id = 3 AND m.receptor_id = 2)
+AND m.eliminado = FALSE
+ORDER BY m.fecha_envio ASC;
+
+-- 5. Ver mensajes no leídos de un usuario
+SELECT 
+    m.id,
+    u.nombre_usuario AS emisor,
+    m.contenido,
+    m.fecha_envio
+FROM mensajes m
+JOIN usuarios u ON m.emisor_id = u.id
+WHERE m.receptor_id = 1 AND m.leido = FALSE AND m.eliminado = FALSE
+ORDER BY m.fecha_envio DESC;
+select * from usuarios;
+-- 6. Ver últimas conversaciones de un usuario (con último mensaje)
+SELECT 
+    CASE 
+        WHEN m.emisor_id = 1 THEN u2.nombre_usuario
+        WHEN m.receptor_id = 1 THEN u1.nombre_usuario
+    END AS contacto,
+    m.contenido AS ultimo_mensaje,
+    m.fecha_envio,
+    COUNT(CASE WHEN m.receptor_id = 1 AND m.leido = FALSE THEN 1 END) AS no_leidos
+FROM mensajes m
+JOIN usuarios u1 ON m.emisor_id = u1.id
+JOIN usuarios u2 ON m.receptor_id = u2.id
+WHERE (m.emisor_id = 1 OR m.receptor_id = 1) AND m.eliminado = FALSE
+GROUP BY contacto, ultimo_mensaje, m.fecha_envio
+ORDER BY m.fecha_envio DESC;
+
+-- 7. Ver estadísticas de solicitudes
+SELECT 
+    estado,
+    COUNT(*) AS cantidad
+FROM solicitudes_contacto
+GROUP BY estado;
+
+-- 8. Ver usuarios que no son contactos de un usuario específico
+SELECT 
+    u.id,
+    u.nombre_usuario,
+    u.foto_perfil_url
+FROM usuarios u
+WHERE u.id != 1
+AND u.id NOT IN (
+    SELECT 
+        CASE 
+            WHEN s.emisor_id = 1 THEN s.receptor_id
+            WHEN s.receptor_id = 1 THEN s.emisor_id
+        END
+    FROM solicitudes_contacto s
+    WHERE (s.emisor_id = 1 OR s.receptor_id = 1) AND s.estado = 'ACEPTADA'
+)
+AND u.id NOT IN (
+    SELECT 
+        CASE 
+            WHEN s.emisor_id = 1 THEN s.receptor_id
+            WHEN s.receptor_id = 1 THEN s.emisor_id
+        END
+    FROM solicitudes_contacto s
+    WHERE (s.emisor_id = 1 OR s.receptor_id = 1) AND s.estado = 'PENDIENTE'
+);
+
+-- 9. Ver mensajes por día
+SELECT 
+    DATE(fecha_envio) AS fecha,
+    COUNT(*) AS total_mensajes
+FROM mensajes
+WHERE eliminado = FALSE
+GROUP BY DATE(fecha_envio)
+ORDER BY fecha DESC;
+
+-- 10. Ver top 5 usuarios con más mensajes enviados
+SELECT 
+    u.nombre_usuario,
+    COUNT(m.id) AS mensajes_enviados
+FROM usuarios u
+JOIN mensajes m ON u.id = m.emisor_id
+WHERE m.eliminado = FALSE
+GROUP BY u.id
+ORDER BY mensajes_enviados DESC
+LIMIT 5;
