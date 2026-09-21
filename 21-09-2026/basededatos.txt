@@ -1,0 +1,888 @@
+-- ============================================================
+-- KIERT DATABASE
+-- ============================================================
+-- Charset: utf8mb4
+-- Engine: InnoDB
+-- ============================================================
+
+DROP DATABASE IF EXISTS kiert_db;
+CREATE DATABASE kiert_db ;
+USE kiert_db;
+
+
+-- ============================================================
+-- 1. USUARIOS
+-- ============================================================
+CREATE TABLE usuarios (
+    id                            BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre_usuario                VARCHAR(20)  NOT NULL UNIQUE,
+    email                         VARCHAR(255) NOT NULL UNIQUE,
+    password_hash                 VARCHAR(255) NOT NULL,
+    foto_perfil_url               VARCHAR(500),
+    bio                           VARCHAR(255),
+    marco_id                      VARCHAR(50) DEFAULT 'none',
+
+    -- Estado de la cuenta
+    activo                        BOOLEAN NOT NULL DEFAULT FALSE,
+    email_verificado              BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_verificacion_email      TIMESTAMP NULL DEFAULT NULL,
+    en_linea                      BOOLEAN NOT NULL DEFAULT FALSE,
+    ultima_conexion               TIMESTAMP NULL DEFAULT NULL,
+    eliminado                     BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_eliminacion             TIMESTAMP NULL DEFAULT NULL,
+
+    -- Auditoría de contraseña
+    fecha_ultimo_cambio_password  TIMESTAMP NULL DEFAULT NULL,
+    intentos_login_fallidos       INT NOT NULL DEFAULT 0,
+    bloqueado_hasta               TIMESTAMP NULL DEFAULT NULL,
+
+    -- Fechas
+    fecha_creacion                TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion           TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    -- Índices
+    INDEX idx_email             (email),
+    INDEX idx_nombre_usuario    (nombre_usuario),
+    INDEX idx_activo            (activo),
+    INDEX idx_en_linea          (en_linea),
+    INDEX idx_eliminado         (eliminado),
+    INDEX idx_email_verificado  (email_verificado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 2. CODIGOS DE VERIFICACION
+-- ============================================================
+CREATE TABLE codigos_verificacion (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    email             VARCHAR(255) NOT NULL,
+    codigo            VARCHAR(6) NOT NULL,
+    tipo              VARCHAR(30) NOT NULL,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_expiracion  TIMESTAMP NOT NULL,
+    usado             BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_uso         TIMESTAMP NULL DEFAULT NULL,
+    ip_solicitante    VARCHAR(45) NULL,
+    user_agent        VARCHAR(500) NULL,
+
+    INDEX idx_codigo_email   (email),
+    INDEX idx_codigo_codigo  (codigo),
+    INDEX idx_codigo_tipo    (tipo),
+    INDEX idx_codigo_usado   (usado),
+    INDEX idx_codigo_expira  (fecha_expiracion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 3. PASSWORD RESET TOKENS (legacy)
+-- ============================================================
+CREATE TABLE password_reset_tokens (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    token             VARCHAR(36) NOT NULL UNIQUE,
+    usuario_id        BIGINT NOT NULL,
+    fecha_expiracion  TIMESTAMP NOT NULL,
+    usado             BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_uso         TIMESTAMP NULL DEFAULT NULL,
+    ip_solicitante    VARCHAR(45) NULL,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_token       (token),
+    INDEX idx_usuario_id  (usuario_id),
+    INDEX idx_usado       (usado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 4. AUDITORIA USUARIO
+-- ============================================================
+CREATE TABLE auditoria_usuario (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id        BIGINT NULL,
+    email             VARCHAR(255) NULL,
+    evento            VARCHAR(60) NOT NULL,
+    descripcion       VARCHAR(500) NULL,
+    exito             BOOLEAN NOT NULL DEFAULT TRUE,
+    ip                VARCHAR(45) NULL,
+    user_agent        VARCHAR(500) NULL,
+    datos_extra       JSON NULL,
+    fecha_evento      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    INDEX idx_auditoria_usuario  (usuario_id),
+    INDEX idx_auditoria_email    (email),
+    INDEX idx_auditoria_evento   (evento),
+    INDEX idx_auditoria_fecha    (fecha_evento DESC),
+    INDEX idx_auditoria_exito    (exito)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 5. POSTS
+-- ============================================================
+CREATE TABLE posts (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    autor_id             BIGINT NOT NULL,
+    titulo               VARCHAR(120) NOT NULL,
+    descripcion          TEXT NOT NULL,
+    categoria            VARCHAR(20) NOT NULL,
+    total_compartidos    BIGINT NOT NULL DEFAULT 0,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion    TIMESTAMP NULL DEFAULT NULL,
+    eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_autor_id        (autor_id),
+    INDEX idx_categoria       (categoria),
+    INDEX idx_fecha_creacion  (fecha_creacion DESC),
+    INDEX idx_eliminado       (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 6. ADJUNTOS
+-- ============================================================
+CREATE TABLE adjuntos (
+    id                 BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id            BIGINT NOT NULL,
+    tipo               VARCHAR(20) NOT NULL,
+    nombre             VARCHAR(255) NOT NULL,
+    url                VARCHAR(1000) NOT NULL,
+    peso_kb            INT,
+    duracion_segundos  INT NULL,
+    ancho              INT NULL,
+    alto               INT NULL,
+    formato            VARCHAR(20) NULL,
+    fecha_creacion     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id),
+    INDEX idx_tipo    (tipo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 7. COMENTARIOS
+-- ============================================================
+CREATE TABLE comentarios (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id              BIGINT NOT NULL,
+    autor_id             BIGINT NOT NULL,
+    contenido            TEXT NOT NULL,
+    url_imagen           VARCHAR(500) NULL,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion    TIMESTAMP NULL DEFAULT NULL,
+    eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (post_id)  REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_post_id        (post_id),
+    INDEX idx_autor_id       (autor_id),
+    INDEX idx_fecha_creacion (fecha_creacion ASC),
+    INDEX idx_eliminado      (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 8. RESPUESTAS COMENTARIOS
+-- ============================================================
+CREATE TABLE respuestas_comentarios (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    comentario_id        BIGINT NOT NULL,
+    autor_id             BIGINT NOT NULL,
+    contenido            TEXT NOT NULL,
+    url_imagen           VARCHAR(500) NULL,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion    TIMESTAMP NULL DEFAULT NULL,
+    eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (comentario_id) REFERENCES comentarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (autor_id)      REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_comentario_id  (comentario_id),
+    INDEX idx_autor_id       (autor_id),
+    INDEX idx_fecha_creacion (fecha_creacion ASC),
+    INDEX idx_eliminado      (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 9. REACCIONES
+-- ============================================================
+CREATE TABLE reacciones (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id      BIGINT NOT NULL,
+    post_id         BIGINT NULL,
+    comentario_id   BIGINT NULL,
+    tipo            VARCHAR(10) NOT NULL,
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id)    REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id)       REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (comentario_id) REFERENCES comentarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_post       (usuario_id, post_id),
+    UNIQUE KEY uk_usuario_comentario (usuario_id, comentario_id),
+    INDEX idx_usuario_id    (usuario_id),
+    INDEX idx_post_id       (post_id),
+    INDEX idx_comentario_id (comentario_id),
+    INDEX idx_tipo          (tipo),
+    CONSTRAINT chk_post_o_comentario CHECK (
+        (post_id IS NOT NULL AND comentario_id IS NULL) OR
+        (post_id IS NULL AND comentario_id IS NOT NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 10. REACCIONES RESPUESTAS
+-- ============================================================
+CREATE TABLE reacciones_respuestas (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id      BIGINT NOT NULL,
+    respuesta_id    BIGINT NOT NULL,
+    tipo            VARCHAR(10) NOT NULL,
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id)   REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (respuesta_id) REFERENCES respuestas_comentarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_respuesta (usuario_id, respuesta_id),
+    INDEX idx_usuario_id   (usuario_id),
+    INDEX idx_respuesta_id (respuesta_id),
+    INDEX idx_tipo         (tipo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 11. MENSAJES
+-- ============================================================
+CREATE TABLE mensajes (
+    id                 BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id          BIGINT NOT NULL,
+    receptor_id        BIGINT NOT NULL,
+    contenido          TEXT NOT NULL,
+    fecha_envio        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leido              BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_leido        TIMESTAMP NULL DEFAULT NULL,
+    tipo_mensaje       VARCHAR(20) DEFAULT 'TEXTO',
+    url_archivo        VARCHAR(1000),
+    nombre_archivo     VARCHAR(255),
+    fecha_eliminacion  TIMESTAMP NULL DEFAULT NULL,
+    eliminado          BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (emisor_id)   REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_emisor_receptor (emisor_id, receptor_id),
+    INDEX idx_receptor_leido  (receptor_id, leido),
+    INDEX idx_fecha_envio     (fecha_envio DESC),
+    INDEX idx_eliminado       (eliminado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 12. SOLICITUDES CONTACTO
+-- ============================================================
+CREATE TABLE solicitudes_contacto (
+    id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id        BIGINT NOT NULL,
+    receptor_id      BIGINT NOT NULL,
+    estado           VARCHAR(10) NOT NULL DEFAULT 'PENDIENTE',
+    mensaje          VARCHAR(255) NULL,
+    fecha_solicitud  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta  TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (emisor_id)   REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_emisor_receptor  (emisor_id, receptor_id),
+    INDEX idx_estado           (estado),
+    INDEX idx_fecha_solicitud  (fecha_solicitud DESC),
+    UNIQUE KEY uk_solicitud_unica (emisor_id, receptor_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 13. BLOQUEOS
+-- ============================================================
+CREATE TABLE bloqueos (
+    id                    BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_bloqueador_id BIGINT NOT NULL,
+    usuario_bloqueado_id  BIGINT NOT NULL,
+    tipo                  VARCHAR(20) NOT NULL DEFAULT 'BLOQUEO',
+    motivo                VARCHAR(255) NOT NULL,
+    fecha_creacion        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    activo                BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (usuario_bloqueador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_bloqueado_id)  REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_bloqueador (usuario_bloqueador_id),
+    INDEX idx_bloqueado  (usuario_bloqueado_id),
+    INDEX idx_activo     (activo),
+    UNIQUE KEY uk_bloqueo_unico (usuario_bloqueador_id, usuario_bloqueado_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 14. GRUPOS CHAT
+-- ============================================================
+CREATE TABLE grupos_chat (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre          VARCHAR(100) NOT NULL,
+    descripcion     VARCHAR(500) NULL,
+    foto_url        VARCHAR(500) NULL,
+    creador_id      BIGINT NOT NULL,
+    tipo            VARCHAR(20) NOT NULL DEFAULT 'PRIVADO',
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (creador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_creador (creador_id),
+    INDEX idx_tipo    (tipo),
+    INDEX idx_activo  (activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 15. MIEMBROS GRUPO
+-- ============================================================
+CREATE TABLE miembros_grupo (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id          BIGINT NOT NULL,
+    usuario_id        BIGINT NOT NULL,
+    rol               VARCHAR(20) NOT NULL DEFAULT 'MIEMBRO',
+    estado            VARCHAR(20) NOT NULL DEFAULT 'ACTIVO',
+    fecha_union       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_invitacion  TIMESTAMP NULL,
+    invitado_por_id   BIGINT NULL,
+    FOREIGN KEY (grupo_id)        REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id)      REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (invitado_por_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    UNIQUE KEY uk_grupo_usuario (grupo_id, usuario_id),
+    INDEX idx_grupo    (grupo_id),
+    INDEX idx_usuario  (usuario_id),
+    INDEX idx_estado   (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 16. MENSAJES GRUPO
+-- ============================================================
+CREATE TABLE mensajes_grupo (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id        BIGINT NOT NULL,
+    emisor_id       BIGINT NOT NULL,
+    contenido       TEXT NOT NULL,
+    tipo_mensaje    VARCHAR(20) DEFAULT 'TEXTO',
+    url_archivo     VARCHAR(1000) NULL,
+    nombre_archivo  VARCHAR(255) NULL,
+    fecha_envio     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    eliminado       BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (grupo_id)  REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (emisor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_grupo  (grupo_id),
+    INDEX idx_emisor (emisor_id),
+    INDEX idx_fecha  (fecha_envio DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 17. NOTIFICACIONES
+-- ============================================================
+CREATE TABLE notificaciones (
+    id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_destino_id  BIGINT NOT NULL,
+    usuario_origen_id   BIGINT NULL,
+    tipo                VARCHAR(30) NOT NULL,
+    mensaje             VARCHAR(500) NOT NULL,
+    leida               BOOLEAN NOT NULL DEFAULT FALSE,
+    post_id             BIGINT NULL,
+    comentario_id       BIGINT NULL,
+    respuesta_id        BIGINT NULL,
+    grupo_id            BIGINT NULL,
+    url                 VARCHAR(500),
+    fecha_creacion      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_leida         TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (usuario_destino_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_origen_id)  REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (post_id)            REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (comentario_id)      REFERENCES comentarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (respuesta_id)       REFERENCES respuestas_comentarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (grupo_id)           REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    INDEX idx_usuario_destino (usuario_destino_id),
+    INDEX idx_usuario_origen  (usuario_origen_id),
+    INDEX idx_tipo            (tipo),
+    INDEX idx_leida           (leida),
+    INDEX idx_fecha_creacion  (fecha_creacion DESC),
+    INDEX idx_post_id         (post_id),
+    INDEX idx_comentario_id   (comentario_id),
+    INDEX idx_respuesta_id    (respuesta_id),
+    INDEX idx_grupo_id        (grupo_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 18. PERSONALIZACION USUARIO
+-- ============================================================
+CREATE TABLE personalizacion_usuario (
+    id                        BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id                BIGINT NOT NULL UNIQUE,
+    tema_id                   VARCHAR(50) DEFAULT 'default',
+    marco_id                  VARCHAR(50) DEFAULT 'none',
+    fondo_id                  VARCHAR(50) DEFAULT 'default',
+    foto_perfil_url           VARCHAR(500),
+    foto_portada_url          VARCHAR(500),
+    marco_personalizado_url   VARCHAR(500),
+    fecha_actualizacion       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_usuario_id (usuario_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 19. MARCOS PERSONALIZADOS
+-- ============================================================
+CREATE TABLE marcos_personalizados (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre          VARCHAR(50) NOT NULL,
+    descripcion     VARCHAR(255),
+    url_imagen      VARCHAR(500) NOT NULL,
+    tipo            VARCHAR(20) DEFAULT 'circulo',
+    precio          DECIMAL(10,2) DEFAULT 0,
+    gratis          BOOLEAN DEFAULT TRUE,
+    activo          BOOLEAN DEFAULT TRUE,
+    usuario_id      BIGINT,
+    fecha_creacion  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    INDEX idx_activo (activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 20. FONDOS PERSONALIZADOS
+-- ============================================================
+CREATE TABLE fondos_personalizados (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre          VARCHAR(50) NOT NULL,
+    descripcion     VARCHAR(255),
+    url_imagen      VARCHAR(500),
+    tipo            VARCHAR(20) DEFAULT 'imagen',
+    gradiente       TEXT,
+    precio          DECIMAL(10,2) DEFAULT 0,
+    gratis          BOOLEAN DEFAULT TRUE,
+    activo          BOOLEAN DEFAULT TRUE,
+    fecha_creacion  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_activo (activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 21. COMPRAS USUARIO
+-- ============================================================
+CREATE TABLE compras_usuario (
+    id            BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id    BIGINT NOT NULL,
+    tipo          VARCHAR(20) NOT NULL,
+    item_id       VARCHAR(50) NOT NULL,
+    precio        DECIMAL(10,2) NOT NULL,
+    fecha_compra  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_item (usuario_id, tipo, item_id),
+    INDEX idx_usuario_id (usuario_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 22. DOCUMENTOS
+-- ============================================================
+CREATE TABLE documentos (
+    id                        BIGINT PRIMARY KEY AUTO_INCREMENT,
+    titulo                    VARCHAR(200) NOT NULL,
+    descripcion               VARCHAR(500) NOT NULL,
+    categoria                 VARCHAR(100) NOT NULL,
+    categoria_personalizada   VARCHAR(100) NULL,
+    url_archivo               VARCHAR(1000) NOT NULL,
+    nombre_archivo            VARCHAR(255) NOT NULL,
+    tipo_archivo              VARCHAR(50) NOT NULL,
+    tamano_kb                 BIGINT NOT NULL,
+    usuario_id                BIGINT NOT NULL,
+    descargas                 BIGINT NOT NULL DEFAULT 0,
+    visitas                   BIGINT NOT NULL DEFAULT 0,
+    activo                    BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_creacion            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion       TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_usuario_id     (usuario_id),
+    INDEX idx_categoria      (categoria),
+    INDEX idx_activo         (activo),
+    INDEX idx_fecha_creacion (fecha_creacion DESC),
+    INDEX idx_tipo_archivo   (tipo_archivo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 23. RECURSOS BIBLIOTECA
+-- ============================================================
+CREATE TABLE recursos_biblioteca (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id           BIGINT NULL,
+    es_usuario           BOOLEAN NOT NULL DEFAULT FALSE,
+    titulo               VARCHAR(200) NOT NULL,
+    descripcion          VARCHAR(1000) NULL,
+    url                  VARCHAR(1000) NOT NULL,
+    categoria            VARCHAR(50) NOT NULL,
+    subcategoria         VARCHAR(100) NULL,
+    imagen               VARCHAR(500) NULL,
+    autor                VARCHAR(150) NULL,
+    plataforma           VARCHAR(150) NULL,
+    duracion             VARCHAR(80) NULL,
+    nivel                VARCHAR(30) NULL,
+    destacado            BOOLEAN DEFAULT FALSE,
+    activo               BOOLEAN DEFAULT TRUE,
+    tags                 VARCHAR(1000) NULL,
+    fecha_agregado       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_categoria       (categoria),
+    INDEX idx_destacado       (destacado),
+    INDEX idx_activo          (activo),
+    INDEX idx_usuario_id      (usuario_id),
+    INDEX idx_es_usuario      (es_usuario),
+    INDEX idx_usuario_fecha   (usuario_id, fecha_agregado DESC),
+    INDEX idx_fecha_agregado  (fecha_agregado DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Vista de recursos con creador
+CREATE OR REPLACE VIEW v_recursos_biblioteca AS
+SELECT
+    r.id, r.usuario_id, r.es_usuario, r.titulo, r.descripcion, r.url,
+    r.categoria, r.subcategoria, r.imagen, r.autor, r.plataforma,
+    r.duracion, r.nivel, r.destacado, r.activo, r.tags,
+    r.fecha_agregado, r.fecha_actualizacion,
+    u.nombre_usuario  AS creador_nombre,
+    u.foto_perfil_url AS creador_foto
+FROM recursos_biblioteca r
+LEFT JOIN usuarios u ON r.usuario_id = u.id
+WHERE r.activo = TRUE;
+
+
+-- ============================================================
+-- 24. REPORTES
+-- ============================================================
+CREATE TABLE reportes (
+    id                     BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_reportante_id  BIGINT NOT NULL,
+    tipo_reporte           VARCHAR(20) NOT NULL,
+    motivo                 VARCHAR(50) NOT NULL,
+    descripcion            TEXT NOT NULL,
+    post_id                BIGINT NULL,
+    comentario_id          BIGINT NULL,
+    respuesta_id           BIGINT NULL,
+    usuario_reportado_id   BIGINT NULL,
+    estado                 VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    revisado_por_id        BIGINT NULL,
+    fecha_revision         TIMESTAMP NULL DEFAULT NULL,
+    nota_moderador         TEXT NULL,
+    accion_tomada          VARCHAR(50) NULL,
+    fecha_creacion         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_usuario             VARCHAR(45) NULL,
+    FOREIGN KEY (usuario_reportante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id)               REFERENCES posts(id) ON DELETE SET NULL,
+    FOREIGN KEY (comentario_id)         REFERENCES comentarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (respuesta_id)          REFERENCES respuestas_comentarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (usuario_reportado_id)  REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (revisado_por_id)       REFERENCES usuarios(id) ON DELETE SET NULL,
+    INDEX idx_usuario_reportante (usuario_reportante_id),
+    INDEX idx_tipo_reporte       (tipo_reporte),
+    INDEX idx_estado             (estado),
+    INDEX idx_fecha_creacion     (fecha_creacion DESC),
+    INDEX idx_post_id            (post_id),
+    INDEX idx_usuario_reportado  (usuario_reportado_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 25. HISTORIAL REPORTES
+-- ============================================================
+CREATE TABLE historial_reportes (
+    id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+    reporte_id       BIGINT NOT NULL,
+    estado_anterior  VARCHAR(20) NULL,
+    estado_nuevo     VARCHAR(20) NOT NULL,
+    cambiado_por_id  BIGINT NOT NULL,
+    nota             TEXT NULL,
+    fecha_cambio     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reporte_id)      REFERENCES reportes(id) ON DELETE CASCADE,
+    FOREIGN KEY (cambiado_por_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_reporte_id    (reporte_id),
+    INDEX idx_fecha_cambio  (fecha_cambio DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- 26. COMPARTIDOS
+-- ============================================================
+CREATE TABLE compartidos (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id        BIGINT NOT NULL,
+    post_id           BIGINT NOT NULL,
+    tipo_compartido   VARCHAR(20) NOT NULL DEFAULT 'INTERNO',
+    comentario        VARCHAR(500) NULL,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id)    REFERENCES posts(id) ON DELETE CASCADE,
+    INDEX idx_usuario_id       (usuario_id),
+    INDEX idx_post_id          (post_id),
+    INDEX idx_tipo_compartido  (tipo_compartido),
+    INDEX idx_fecha_creacion   (fecha_creacion DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- DATOS DE PRUEBA
+-- ============================================================
+
+-- USUARIOS DE PRUEBA
+-- (todos activos y verificados para poder iniciar sesion)
+INSERT INTO usuarios 
+    (nombre_usuario, email, password_hash, bio, activo, email_verificado, fecha_verificacion_email) 
+VALUES
+    ('adrian', 'adrian@kiert.com', '$2a$10$hashAdrian', 'Desarrollador full-stack', TRUE, TRUE, NOW()),
+    ('ashly',  'ashly@kiert.com',  '$2a$10$hashAshly',  'Disenadora UX/UI',         TRUE, TRUE, NOW()),
+    ('carlos', 'carlos@kiert.com', '$2a$10$hashCarlos', 'Backend engineer',         TRUE, TRUE, NOW());
+
+
+-- PERSONALIZACION
+INSERT INTO personalizacion_usuario (usuario_id, tema_id, marco_id, fondo_id) VALUES
+    (1, 'default', 'none',    'default'),
+    (2, 'dark',    'gold',    'aurora'),
+    (3, 'light',   'classic', 'sunset');
+
+
+-- RECURSOS BIBLIOTECA (globales)
+INSERT INTO recursos_biblioteca 
+    (titulo, descripcion, url, categoria, subcategoria, autor, plataforma, duracion, nivel, destacado, tags) 
+VALUES
+    ('SQL',       
+     'Curso completo de SQL gratis.',           
+     'https://www.aprendesql.dev/',                                                
+     'certificacion', 'Bases de Datos',         
+     'AprendeSQL.dev',       
+     'AprendeSQL.dev',       
+     '30h', 'principiante', TRUE, 'sql,basesdedatos'),
+
+    ('Power BI',  
+     'Introduccion a Power BI gratuita.',       
+     'https://capacitacionlaboral.trabajo.gob.pe/cursos/introduccion-al-power-bi/',
+     'certificacion', 'Business Intelligence', 
+     'Ministerio de Trabajo',
+     'Capacitacion Laboral', 
+     '20h', 'principiante', TRUE, 'powerbi,bi'),
+
+    ('Ingles A2', 
+     'Ingles A2 para desarrolladores.',         
+     'http://midu.link/ingles-a2',                                                 
+     'certificacion', 'Idiomas',               
+     'freeCodeCamp.org',     
+     'freeCodeCamp.org',     
+     '40h', 'principiante', TRUE, 'ingles,a2'),
+
+    ('Gemini para estudiantes',
+     'Certificacion de Gemini para estudiantes. Aprende a usar IA (Gemini y NotebookLM) de forma responsable para potenciar tu aprendizaje y creatividad.',
+     'https://edu.exceedlms.com/student/path/1825254-certificacion-de-gemini-para-estudiantes',
+     'certificacion', 'Inteligencia Artificial',
+     'Google',
+     'Exceed LMS',
+     NULL, 'principiante', TRUE, 'gemini,ia,inteligenciaartificial,google');
+
+
+-- RECURSOS BIBLIOTECA (de usuarios)
+INSERT INTO recursos_biblioteca 
+    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria, autor, plataforma, duracion, nivel, destacado, tags) 
+VALUES
+    (1, TRUE, 'Angular 17',          'Tutorial oficial con signals.', 'https://angular.dev/tutorials',      'curso',         'Frontend',       'Google',    'Angular.dev', '8h', 'intermedio', FALSE, 'angular,typescript'),
+    (1, TRUE, 'Documentacion MySQL', 'Referencia de consultas SQL.',  'https://dev.mysql.com/doc/',        'articulo',      'Bases de Datos', 'Oracle',    'MySQL Docs',  NULL, NULL,         TRUE,  'mysql,sql'),
+    (2, TRUE, 'Ingles B1',           'Certificacion Cambridge B1.',   'https://www.cambridgeenglish.org/', 'certificacion', 'Idiomas',        'Cambridge', 'Cambridge',   '60h', 'intermedio', TRUE,  'ingles,b1');
+
+
+-- DOCUMENTOS
+INSERT INTO documentos 
+    (titulo, descripcion, categoria, url_archivo, nombre_archivo, tipo_archivo, tamano_kb, usuario_id) 
+VALUES
+    ('Guia de Integrales',    'Guia completa de integrales',           'Matematicas',  'https://ejemplo.com/docs/integrales.pdf',   'integrales.pdf',   'pdf', 2450, 1),
+    ('Teoria de Funciones',   'Dominio, rango y graficas',             'Matematicas',  'https://ejemplo.com/docs/funciones.pdf',    'funciones.pdf',    'pdf', 1800, 1),
+    ('Intro Programacion',    'Apuntes con ejemplos en Python',        'Programacion', 'https://ejemplo.com/docs/programacion.pdf', 'programacion.pdf', 'pdf', 3200, 2),
+    ('Ejercicios Integrales', '50 ejercicios con soluciones',          'Integrales',   'https://ejemplo.com/docs/ejercicios.pdf',   'ejercicios.pdf',   'pdf', 1500, 3),
+    ('Comunicacion Efectiva', 'Mejora tu comunicacion escrita y oral', 'Comunicacion', 'https://ejemplo.com/docs/comunicacion.pdf', 'comunicacion.pdf', 'pdf', 2100, 1);
+
+
+-- GRUPOS
+INSERT INTO grupos_chat (nombre, descripcion, creador_id, tipo) VALUES
+    ('Estudios SQL',     'Grupo para compartir apuntes de SQL', 1, 'PRIVADO'),
+    ('Diseno UX/UI',     'Compartimos recursos de diseno',      2, 'PUBLICO'),
+    ('Programacion Web', 'Todo sobre frontend y backend',       3, 'PUBLICO');
+
+
+-- MIEMBROS GRUPO
+INSERT INTO miembros_grupo (grupo_id, usuario_id, rol, estado, invitado_por_id) VALUES
+    (1, 1, 'ADMIN',   'ACTIVO',    NULL),
+    (1, 2, 'MIEMBRO', 'ACTIVO',    1),
+    (1, 3, 'MIEMBRO', 'PENDIENTE', 1),
+    (2, 2, 'ADMIN',   'ACTIVO',    NULL),
+    (2, 1, 'MIEMBRO', 'ACTIVO',    2),
+    (3, 3, 'ADMIN',   'ACTIVO',    NULL),
+    (3, 1, 'MIEMBRO', 'ACTIVO',    3),
+    (3, 2, 'MIEMBRO', 'ACTIVO',    3);
+
+
+-- NOTIFICACIONES
+INSERT INTO notificaciones (usuario_destino_id, usuario_origen_id, tipo, mensaje, leida, grupo_id, url) VALUES
+    (2, 1, 'solicitud',        'adrian quiere ser tu contacto',          FALSE, NULL, '/chat'),
+    (3, 1, 'INVITACION_GRUPO', 'adrian te invito al grupo Estudios SQL', FALSE, 1,    '/chat/grupo/1');
+
+
+-- AUDITORIA DE EJEMPLO
+INSERT INTO auditoria_usuario (usuario_id, email, evento, descripcion, exito, ip, user_agent) VALUES
+    (1, 'adrian@kiert.com', 'REGISTRO',           'Usuario registrado',                    TRUE,  '127.0.0.1', 'Mozilla/5.0'),
+    (1, 'adrian@kiert.com', 'VERIFICACION_EMAIL', 'Cuenta verificada con codigo',          TRUE,  '127.0.0.1', 'Mozilla/5.0'),
+    (1, 'adrian@kiert.com', 'LOGIN',              'Inicio de sesion correcto',             TRUE,  '127.0.0.1', 'Mozilla/5.0'),
+    (2, 'ashly@kiert.com',  'REGISTRO',           'Usuario registrado',                    TRUE,  '127.0.0.1', 'Mozilla/5.0'),
+    (2, 'ashly@kiert.com',  'VERIFICACION_EMAIL', 'Cuenta verificada con codigo',          TRUE,  '127.0.0.1', 'Mozilla/5.0'),
+    (2, 'ashly@kiert.com',  'CAMBIO_PASSWORD',    'Contrasena restablecida con codigo',    TRUE,  '127.0.0.1', 'Mozilla/5.0');
+
+
+-- ============================================================
+-- AJUSTES AUTO_INCREMENT
+-- ============================================================
+ALTER TABLE usuarios              AUTO_INCREMENT = 10;
+ALTER TABLE posts                 AUTO_INCREMENT = 10;
+ALTER TABLE grupos_chat           AUTO_INCREMENT = 10;
+ALTER TABLE recursos_biblioteca   AUTO_INCREMENT = 20;
+ALTER TABLE documentos            AUTO_INCREMENT = 20;
+ALTER TABLE notificaciones        AUTO_INCREMENT = 10;
+ALTER TABLE auditoria_usuario     AUTO_INCREMENT = 100;
+ALTER TABLE codigos_verificacion  AUTO_INCREMENT = 100;
+
+
+-- ============================================================
+-- CONSULTAS DE VERIFICACION
+-- ============================================================
+
+-- 1. Ver usuarios
+SELECT 
+    id, 
+    nombre_usuario, 
+    email, 
+    activo, 
+    email_verificado, 
+    en_linea, 
+    fecha_creacion 
+FROM usuarios;
+
+-- 2. Ver auditoria reciente
+SELECT
+    id,
+    usuario_id,
+    email,
+    evento,
+    descripcion,
+    exito,
+    ip,
+    fecha_evento
+FROM auditoria_usuario
+ORDER BY fecha_evento DESC
+LIMIT 20;
+
+-- 3. Ver codigos de verificacion activos
+SELECT
+    id,
+    email,
+    codigo,
+    tipo,
+    fecha_creacion,
+    fecha_expiracion,
+    usado
+FROM codigos_verificacion
+WHERE usado = FALSE AND fecha_expiracion > NOW()
+ORDER BY fecha_creacion DESC;
+
+-- 4. Ver recursos biblioteca con creador
+SELECT
+    r.id                                       AS ID,
+    IF(r.es_usuario, 'Usuario', 'Global')      AS Tipo,
+    r.titulo                                   AS Titulo,
+    r.descripcion                              AS Descripcion,
+    r.categoria                                AS Categoria,
+    r.autor                                    AS Autor,
+    r.destacado                                AS Destacado,
+    COALESCE(u.nombre_usuario, 'Sistema')      AS Creador,
+    r.fecha_agregado                           AS Fecha
+FROM recursos_biblioteca r
+LEFT JOIN usuarios u ON r.usuario_id = u.id
+WHERE r.activo = TRUE
+ORDER BY r.es_usuario DESC, r.fecha_agregado DESC;
+
+-- 5. Ver grupos con conteo de miembros
+SELECT
+    g.id                                AS ID,
+    g.nombre                            AS Grupo,
+    g.tipo                              AS Tipo,
+    u.nombre_usuario                    AS Creador,
+    COUNT(m.id)                         AS MiembrosActivos,
+    g.fecha_creacion                    AS Creado
+FROM grupos_chat g
+JOIN usuarios u ON g.creador_id = u.id
+LEFT JOIN miembros_grupo m ON g.id = m.grupo_id AND m.estado = 'ACTIVO'
+WHERE g.activo = TRUE
+GROUP BY g.id
+ORDER BY MiembrosActivos DESC;
+
+-- 6. Estadisticas generales
+SELECT
+    (SELECT COUNT(*) FROM usuarios WHERE eliminado = FALSE)                  AS TotalUsuarios,
+    (SELECT COUNT(*) FROM usuarios WHERE email_verificado = TRUE)            AS UsuariosVerificados,
+    (SELECT COUNT(*) FROM posts WHERE eliminado = FALSE)                     AS TotalPosts,
+    (SELECT COUNT(*) FROM grupos_chat WHERE activo = TRUE)                   AS TotalGrupos,
+    (SELECT COUNT(*) FROM recursos_biblioteca WHERE activo = TRUE)           AS TotalRecursos,
+    (SELECT COUNT(*) FROM documentos WHERE activo = TRUE)                    AS TotalDocumentos,
+    (SELECT COUNT(*) FROM auditoria_usuario WHERE evento = 'LOGIN')          AS TotalLogins,
+    (SELECT COUNT(*) FROM auditoria_usuario WHERE evento = 'CAMBIO_PASSWORD') AS TotalCambiosPassword;
+
+-- 7. Cambios de contrasena de los ultimos 30 dias
+SELECT
+    a.id                AS ID,
+    u.nombre_usuario    AS Usuario,
+    a.email             AS Email,
+    a.descripcion       AS Descripcion,
+    a.exito             AS Exito,
+    a.ip                AS IP,
+    a.fecha_evento      AS FechaHora
+FROM auditoria_usuario a
+LEFT JOIN usuarios u ON a.usuario_id = u.id
+WHERE a.evento = 'CAMBIO_PASSWORD'
+  AND a.fecha_evento >= NOW() - INTERVAL 30 DAY
+ORDER BY a.fecha_evento DESC;
+
+-- 8. Auditoria completa de un usuario (por nombre)
+SELECT
+    a.evento            AS Evento,
+    a.descripcion       AS Descripcion,
+    a.exito             AS Exito,
+    a.ip                AS IP,
+    a.user_agent        AS UserAgent,
+    a.fecha_evento      AS FechaHora
+FROM auditoria_usuario a
+LEFT JOIN usuarios u ON a.usuario_id = u.id
+WHERE u.nombre_usuario = 'adrian'
+ORDER BY a.fecha_evento DESC;
+
+-- 9. Intentos de login fallidos (para detectar ataques)
+SELECT
+    ip,
+    COUNT(*)             AS IntentosFallidos,
+    MAX(fecha_evento)    AS UltimoIntento
+FROM auditoria_usuario
+WHERE evento = 'LOGIN_FALLIDO'
+  AND fecha_evento >= NOW() - INTERVAL 24 HOUR
+GROUP BY ip
+ORDER BY IntentosFallidos DESC;
+
+-- 10. Usuarios que nunca han cambiado su contrasena
+SELECT
+    id                              AS ID,
+    nombre_usuario                  AS Usuario,
+    email                           AS Email,
+    fecha_creacion                  AS Registro
+FROM usuarios
+WHERE fecha_ultimo_cambio_password IS NULL
+  AND eliminado = FALSE
+ORDER BY fecha_creacion DESC;
