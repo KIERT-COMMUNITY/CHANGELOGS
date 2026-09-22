@@ -11,6 +11,50 @@ USE kiert_db;
 
 
 -- ============================================================
+-- 16.c HISTORIAL DEL GRUPO (AUDITORÍA)
+-- ============================================================
+CREATE TABLE grupo_historial (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id        BIGINT NOT NULL,
+    usuario_id      BIGINT NULL,
+    accion          VARCHAR(30) NOT NULL,       -- CREAR, EDITAR_NOMBRE, EDITAR_DESC, CAMBIAR_FOTO, ELIMINAR_FOTO, INVITAR, EXPULSAR, SALIR, ELIMINAR, LINK_CREADO, LINK_DESACTIVADO, MIEMBRO_UNIDO
+    detalle         TEXT NULL,                  -- JSON con los cambios
+    valor_anterior  VARCHAR(1000) NULL,
+    valor_nuevo     VARCHAR(1000) NULL,
+    fecha           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id)   REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    INDEX idx_gh_grupo      (grupo_id),
+    INDEX idx_gh_usuario    (usuario_id),
+    INDEX idx_gh_accion     (accion),
+    INDEX idx_gh_fecha      (fecha DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+select * from grupo_historial;
+-- ============================================================
+-- 16.b INVITACIONES POR LINK
+-- ============================================================
+CREATE TABLE invitaciones_grupo_link (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id          BIGINT NOT NULL,
+    token             VARCHAR(36) NOT NULL UNIQUE,
+    creador_id        BIGINT NOT NULL,
+    usos_maximos      INT NOT NULL DEFAULT 0,        -- 0 = ilimitado
+    usos_actuales     INT NOT NULL DEFAULT 0,
+    expira_en         TIMESTAMP NULL DEFAULT NULL,   -- NULL = nunca expira
+    activo            BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_ultimo_uso  TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (grupo_id)   REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (creador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX idx_token        (token),
+    INDEX idx_grupo_id     (grupo_id),
+    INDEX idx_activo       (activo),
+    INDEX idx_creador_id   (creador_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 -- 1. USUARIOS
 -- ============================================================
 CREATE TABLE usuarios (
