@@ -1,0 +1,1332 @@
+-- ============================================================
+-- KIERT DATABASE — v1.0
+-- ============================================================
+-- Motor: InnoDB
+-- Charset: utf8mb4 / utf8mb4_unicode_ci
+-- Fecha: 2026-10-01
+-- ============================================================
+
+DROP DATABASE IF EXISTS kiert_db;
+CREATE DATABASE kiert_db
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+USE kiert_db;
+
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';
+SET FOREIGN_KEY_CHECKS = 1;
+
+
+-- ============================================================
+-- TABLA 1: USUARIOS
+-- ============================================================
+CREATE TABLE usuarios (
+    id                            BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre_usuario                VARCHAR(20)  NOT NULL UNIQUE,
+    email                         VARCHAR(255) NOT NULL UNIQUE,
+    password_hash                 VARCHAR(255) NOT NULL,
+    foto_perfil_url               VARCHAR(500),
+    bio                           VARCHAR(255),
+    marco_id                      VARCHAR(50) DEFAULT 'none',
+
+    -- Estado de la cuenta
+    activo                        BOOLEAN NOT NULL DEFAULT FALSE,
+    email_verificado              BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_verificacion_email      TIMESTAMP NULL DEFAULT NULL,
+    en_linea                      BOOLEAN NOT NULL DEFAULT FALSE,
+    ultima_conexion               TIMESTAMP NULL DEFAULT NULL,
+    eliminado                     BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_eliminacion             TIMESTAMP NULL DEFAULT NULL,
+
+    -- Auditoría de contraseña
+    fecha_ultimo_cambio_password  TIMESTAMP NULL DEFAULT NULL,
+    intentos_login_fallidos       INT NOT NULL DEFAULT 0,
+    bloqueado_hasta               TIMESTAMP NULL DEFAULT NULL,
+
+    -- Fechas
+    fecha_creacion                TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion           TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+-- ============================================================
+-- TABLA 2: CODIGOS DE VERIFICACION
+-- ============================================================
+CREATE TABLE codigos_verificacion (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    email             VARCHAR(255) NOT NULL,
+    codigo            VARCHAR(6) NOT NULL,
+    tipo              VARCHAR(30) NOT NULL,        -- VERIFICACION_CUENTA, RECUPERACION_PASSWORD
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_expiracion  TIMESTAMP NOT NULL,
+    usado             BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_uso         TIMESTAMP NULL DEFAULT NULL,
+    ip_solicitante    VARCHAR(45) NULL,
+    user_agent        VARCHAR(500) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 3: PASSWORD RESET TOKENS (LEGACY)
+-- ============================================================
+CREATE TABLE password_reset_tokens (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    token             VARCHAR(36) NOT NULL UNIQUE,
+    usuario_id        BIGINT NOT NULL,
+    fecha_expiracion  TIMESTAMP NOT NULL,
+    usado             BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_uso         TIMESTAMP NULL DEFAULT NULL,
+    ip_solicitante    VARCHAR(45) NULL,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 4: AUDITORIA USUARIO
+-- ============================================================
+CREATE TABLE auditoria_usuario (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id        BIGINT NULL,
+    email             VARCHAR(255) NULL,
+    evento            VARCHAR(60) NOT NULL,
+    descripcion       VARCHAR(500) NULL,
+    exito             BOOLEAN NOT NULL DEFAULT TRUE,
+    ip                VARCHAR(45) NULL,
+    user_agent        VARCHAR(500) NULL,
+    datos_extra       JSON NULL,
+    fecha_evento      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- ============================================================
+-- TABLA 5: POSTS
+-- ============================================================
+CREATE TABLE posts (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    autor_id             BIGINT NOT NULL,
+    titulo               VARCHAR(120) NOT NULL,
+    descripcion          TEXT NOT NULL,
+    categoria            VARCHAR(20) NOT NULL,
+    total_compartidos    BIGINT NOT NULL DEFAULT 0,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion    TIMESTAMP NULL DEFAULT NULL,
+    eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 6: ADJUNTOS
+-- ============================================================
+CREATE TABLE adjuntos (
+    id                 BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id            BIGINT NOT NULL,
+    tipo               VARCHAR(20) NOT NULL,   -- imagen, video, gif, archivo, link
+    nombre             VARCHAR(255) NOT NULL,
+    url                VARCHAR(1000) NOT NULL,
+    peso_kb            INT,
+    duracion_segundos  INT NULL,
+    ancho              INT NULL,
+    alto               INT NULL,
+    formato            VARCHAR(20) NULL,
+    fecha_creacion     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 7: COMENTARIOS
+-- ============================================================
+CREATE TABLE comentarios (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    post_id              BIGINT NOT NULL,
+    autor_id             BIGINT NOT NULL,
+    contenido            TEXT NOT NULL,
+    url_imagen           VARCHAR(500) NULL,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion    TIMESTAMP NULL DEFAULT NULL,
+    eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (post_id)  REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 8: RESPUESTAS COMENTARIOS
+-- ============================================================
+CREATE TABLE respuestas_comentarios (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    comentario_id        BIGINT NOT NULL,
+    autor_id             BIGINT NOT NULL,
+    contenido            TEXT NOT NULL,
+    url_imagen           VARCHAR(500) NULL,
+    fecha_creacion       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    fecha_eliminacion    TIMESTAMP NULL DEFAULT NULL,
+    eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (comentario_id) REFERENCES comentarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (autor_id)      REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+-- ============================================================
+-- TABLA 9: REACCIONES
+-- ============================================================
+CREATE TABLE reacciones (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id      BIGINT NOT NULL,
+    post_id         BIGINT NULL,
+    comentario_id   BIGINT NULL,
+    tipo            VARCHAR(10) NOT NULL,       -- like, love, haha, wow, sad, angry
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id)    REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id)       REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (comentario_id) REFERENCES comentarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_post       (usuario_id, post_id),
+    UNIQUE KEY uk_usuario_comentario (usuario_id, comentario_id),
+    CONSTRAINT chk_post_o_comentario CHECK (
+        (post_id IS NOT NULL AND comentario_id IS NULL) OR
+        (post_id IS NULL AND comentario_id IS NOT NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 10: REACCIONES RESPUESTAS
+-- ============================================================
+CREATE TABLE reacciones_respuestas (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id      BIGINT NOT NULL,
+    respuesta_id    BIGINT NOT NULL,
+    tipo            VARCHAR(10) NOT NULL,
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id)   REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (respuesta_id) REFERENCES respuestas_comentarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_respuesta (usuario_id, respuesta_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+-- ============================================================
+-- TABLA 11: MENSAJES
+-- ============================================================
+CREATE TABLE mensajes (
+    id                 BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id          BIGINT NOT NULL,
+    receptor_id        BIGINT NOT NULL,
+    contenido          TEXT NOT NULL,
+    fecha_envio        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leido              BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_leido        TIMESTAMP NULL DEFAULT NULL,
+    tipo_mensaje       VARCHAR(20) DEFAULT 'TEXTO',
+    url_archivo        VARCHAR(1000),
+    nombre_archivo     VARCHAR(255),
+    fecha_eliminacion  TIMESTAMP NULL DEFAULT NULL,
+    eliminado          BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (emisor_id)   REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 12: SOLICITUDES CONTACTO
+-- ============================================================
+CREATE TABLE solicitudes_contacto (
+    id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+    emisor_id        BIGINT NOT NULL,
+    receptor_id      BIGINT NOT NULL,
+    estado           VARCHAR(10) NOT NULL DEFAULT 'PENDIENTE',  -- PENDIENTE, ACEPTADA, RECHAZADA
+    mensaje          VARCHAR(255) NULL,
+    fecha_solicitud  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta  TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (emisor_id)   REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (receptor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_solicitud_unica (emisor_id, receptor_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 13: BLOQUEOS
+-- ============================================================
+CREATE TABLE bloqueos (
+    id                    BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_bloqueador_id BIGINT NOT NULL,
+    usuario_bloqueado_id  BIGINT NOT NULL,
+    tipo                  VARCHAR(20) NOT NULL DEFAULT 'BLOQUEO',
+    motivo                VARCHAR(255) NOT NULL,
+    fecha_creacion        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    activo                BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (usuario_bloqueador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_bloqueado_id)  REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_bloqueo_unico (usuario_bloqueador_id, usuario_bloqueado_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+-- ============================================================
+-- TABLA 14: GRUPOS CHAT
+-- ============================================================
+CREATE TABLE grupos_chat (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre          VARCHAR(100) NOT NULL,
+    descripcion     VARCHAR(500) NULL,
+    foto_url        VARCHAR(500) NULL,
+    creador_id      BIGINT NOT NULL,
+    tipo            VARCHAR(20) NOT NULL DEFAULT 'PRIVADO',  -- PRIVADO, PUBLICO
+    fecha_creacion  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    activo          BOOLEAN NOT NULL DEFAULT TRUE,
+    FOREIGN KEY (creador_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 15: MIEMBROS GRUPO
+-- ============================================================
+CREATE TABLE miembros_grupo (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id          BIGINT NOT NULL,
+    usuario_id        BIGINT NOT NULL,
+    rol               VARCHAR(20) NOT NULL DEFAULT 'MIEMBRO',  -- ADMIN, MIEMBRO
+    estado            VARCHAR(20) NOT NULL DEFAULT 'ACTIVO',   -- ACTIVO, PENDIENTE, EXPULSADO, SALIO, RECHAZADO
+    fecha_union       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_invitacion  TIMESTAMP NULL,
+    invitado_por_id   BIGINT NULL,
+    FOREIGN KEY (grupo_id)        REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id)      REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (invitado_por_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    UNIQUE KEY uk_grupo_usuario (grupo_id, usuario_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 16: MENSAJES GRUPO
+-- ============================================================
+CREATE TABLE mensajes_grupo (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id        BIGINT NOT NULL,
+    emisor_id       BIGINT NOT NULL,
+    contenido       TEXT NOT NULL,
+    tipo_mensaje    VARCHAR(20) DEFAULT 'TEXTO',
+    url_archivo     VARCHAR(1000) NULL,
+    nombre_archivo  VARCHAR(255) NULL,
+    fecha_envio     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    eliminado       BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (grupo_id)  REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (emisor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 16.b: INVITACIONES POR LINK
+-- ============================================================
+CREATE TABLE invitaciones_grupo_link (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id          BIGINT NOT NULL,
+    token             VARCHAR(36) NOT NULL UNIQUE,
+    creador_id        BIGINT NOT NULL,
+    usos_maximos      INT NOT NULL DEFAULT 0,        -- 0 = ilimitado
+    usos_actuales     INT NOT NULL DEFAULT 0,
+    expira_en         TIMESTAMP NULL DEFAULT NULL,   -- NULL = nunca expira
+    activo            BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_ultimo_uso  TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (grupo_id)   REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (creador_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 16.c: HISTORIAL DEL GRUPO (AUDITORÍA)
+-- ============================================================
+CREATE TABLE grupo_historial (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    grupo_id        BIGINT NOT NULL,
+    usuario_id      BIGINT NULL,
+    accion          VARCHAR(30) NOT NULL,
+    detalle         TEXT NULL,
+    valor_anterior  VARCHAR(1000) NULL,
+    valor_nuevo     VARCHAR(1000) NULL,
+    fecha           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grupo_id)   REFERENCES grupos_chat(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+-- ============================================================
+-- TABLA 17: NOTIFICACIONES
+-- ============================================================
+CREATE TABLE notificaciones (
+    id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_destino_id  BIGINT NOT NULL,
+    usuario_origen_id   BIGINT NULL,
+    tipo                VARCHAR(30) NOT NULL,   -- like, comentario, respuesta, solicitud, INVITACION_GRUPO
+    mensaje             VARCHAR(500) NOT NULL,
+    leida               BOOLEAN NOT NULL DEFAULT FALSE,
+    post_id             BIGINT NULL,
+    comentario_id       BIGINT NULL,
+    respuesta_id        BIGINT NULL,
+    grupo_id            BIGINT NULL,
+    url                 VARCHAR(500),
+    fecha_creacion      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_leida         TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (usuario_destino_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_origen_id)  REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (post_id)            REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (comentario_id)      REFERENCES comentarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (respuesta_id)       REFERENCES respuestas_comentarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (grupo_id)           REFERENCES grupos_chat(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+-- ============================================================
+-- TABLA 18: PERSONALIZACION USUARIO
+-- ============================================================
+CREATE TABLE personalizacion_usuario (
+    id                        BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id                BIGINT NOT NULL UNIQUE,
+    tema_id                   VARCHAR(50) DEFAULT 'default',
+    marco_id                  VARCHAR(50) DEFAULT 'none',
+    fondo_id                  VARCHAR(50) DEFAULT 'default',
+    foto_perfil_url           VARCHAR(500),
+    foto_portada_url          VARCHAR(500),
+    marco_personalizado_url   VARCHAR(500),
+    fecha_actualizacion       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 19: MARCOS PERSONALIZADOS
+-- ============================================================
+CREATE TABLE marcos_personalizados (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre          VARCHAR(50) NOT NULL,
+    descripcion     VARCHAR(255),
+    url_imagen      VARCHAR(500) NOT NULL,
+    tipo            VARCHAR(20) DEFAULT 'circulo',
+    precio          DECIMAL(10,2) DEFAULT 0,
+    gratis          BOOLEAN DEFAULT TRUE,
+    activo          BOOLEAN DEFAULT TRUE,
+    usuario_id      BIGINT,
+    fecha_creacion  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 20: FONDOS PERSONALIZADOS
+-- ============================================================
+CREATE TABLE fondos_personalizados (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nombre          VARCHAR(50) NOT NULL,
+    descripcion     VARCHAR(255),
+    url_imagen      VARCHAR(500),
+    tipo            VARCHAR(20) DEFAULT 'imagen',
+    gradiente       TEXT,
+    precio          DECIMAL(10,2) DEFAULT 0,
+    gratis          BOOLEAN DEFAULT TRUE,
+    activo          BOOLEAN DEFAULT TRUE,
+    fecha_creacion  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 21: COMPRAS USUARIO
+-- ============================================================
+CREATE TABLE compras_usuario (
+    id            BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id    BIGINT NOT NULL,
+    tipo          VARCHAR(20) NOT NULL,       -- MARCO, FONDO, TEMA
+    item_id       VARCHAR(50) NOT NULL,
+    precio        DECIMAL(10,2) NOT NULL,
+    fecha_compra  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_usuario_item (usuario_id, tipo, item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+
+-- ============================================================
+-- TABLA 22: DOCUMENTOS
+-- ============================================================
+CREATE TABLE documentos (
+    id                        BIGINT PRIMARY KEY AUTO_INCREMENT,
+    titulo                    VARCHAR(200) NOT NULL,
+    descripcion               VARCHAR(500) NOT NULL,
+    categoria                 VARCHAR(100) NOT NULL,
+    categoria_personalizada   VARCHAR(100) NULL,
+    url_archivo               VARCHAR(1000) NOT NULL,
+    nombre_archivo            VARCHAR(255) NOT NULL,
+    tipo_archivo              VARCHAR(50) NOT NULL,
+    tamano_kb                 BIGINT NOT NULL,
+    usuario_id                BIGINT NOT NULL,
+    descargas                 BIGINT NOT NULL DEFAULT 0,
+    visitas                   BIGINT NOT NULL DEFAULT 0,
+    activo                    BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_creacion            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion       TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 23: RECURSOS BIBLIOTECA
+-- ============================================================
+CREATE TABLE recursos_biblioteca (
+    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id           BIGINT NULL,
+    es_usuario           BOOLEAN NOT NULL DEFAULT FALSE,
+    titulo               VARCHAR(200) NOT NULL,
+    descripcion          VARCHAR(1000) NULL,
+    url                  VARCHAR(1000) NOT NULL,
+    categoria            VARCHAR(50) NOT NULL,
+    subcategoria         VARCHAR(100) NULL,
+    imagen               VARCHAR(500) NULL,
+    autor                VARCHAR(150) NULL,
+    plataforma           VARCHAR(150) NULL,
+    duracion             VARCHAR(80) NULL,
+    nivel                VARCHAR(30) NULL,
+    destacado            BOOLEAN DEFAULT FALSE,
+    activo               BOOLEAN DEFAULT TRUE,
+    tags                 VARCHAR(1000) NULL,
+    fecha_agregado       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+
+-- ============================================================
+-- TABLA 24: REPORTES
+-- ============================================================
+CREATE TABLE reportes (
+    id                     BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_reportante_id  BIGINT NOT NULL,
+    tipo_reporte           VARCHAR(20) NOT NULL,   -- POST, COMENTARIO, RESPUESTA, USUARIO
+    motivo                 VARCHAR(50) NOT NULL,   -- SPAM, ACOSO, CONTENIDO_INAPROPIADO, VIOLENCIA, DERECHOS_AUTOR, INFORMACION_FALSA, OTRO
+    descripcion            TEXT NOT NULL,
+    post_id                BIGINT NULL,
+    comentario_id          BIGINT NULL,
+    respuesta_id           BIGINT NULL,
+    usuario_reportado_id   BIGINT NULL,
+    estado                 VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',   -- PENDIENTE, REVISANDO, RESUELTO, RECHAZADO
+    revisado_por_id        BIGINT NULL,
+    fecha_revision         TIMESTAMP NULL DEFAULT NULL,
+    nota_moderador         TEXT NULL,
+    accion_tomada          VARCHAR(50) NULL,
+    fecha_creacion         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_usuario             VARCHAR(45) NULL,
+    FOREIGN KEY (usuario_reportante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id)               REFERENCES posts(id) ON DELETE SET NULL,
+    FOREIGN KEY (comentario_id)         REFERENCES comentarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (respuesta_id)          REFERENCES respuestas_comentarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (usuario_reportado_id)  REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (revisado_por_id)       REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 25: HISTORIAL REPORTES
+-- ============================================================
+CREATE TABLE historial_reportes (
+    id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+    reporte_id       BIGINT NOT NULL,
+    estado_anterior  VARCHAR(20) NULL,
+    estado_nuevo     VARCHAR(20) NOT NULL,
+    cambiado_por_id  BIGINT NOT NULL,
+    nota             TEXT NULL,
+    fecha_cambio     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reporte_id)      REFERENCES reportes(id) ON DELETE CASCADE,
+    FOREIGN KEY (cambiado_por_id) REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- TABLA 26: COMPARTIDOS
+-- ============================================================
+CREATE TABLE compartidos (
+    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    usuario_id        BIGINT NOT NULL,
+    post_id           BIGINT NOT NULL,
+    tipo_compartido   VARCHAR(20) NOT NULL DEFAULT 'INTERNO',  -- INTERNO, EXTERNO
+    comentario        VARCHAR(500) NULL,
+    fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id)    REFERENCES posts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+
+
+
+-- ============================================================
+-- ÍNDICES COMPUESTOS PARA OPTIMIZACIÓN
+-- ============================================================
+
+-- ---------- USUARIOS ----------
+CREATE INDEX idx_usuarios_activos_verificados
+    ON usuarios (eliminado, activo, email_verificado, fecha_creacion DESC);
+
+CREATE INDEX idx_usuarios_en_linea
+    ON usuarios (eliminado, en_linea, ultima_conexion DESC);
+
+CREATE INDEX idx_usuarios_bloqueados
+    ON usuarios (bloqueado_hasta);
+
+CREATE INDEX idx_usuarios_eliminados_fecha
+    ON usuarios (eliminado, fecha_eliminacion DESC);
+
+CREATE INDEX idx_usuarios_fecha_creacion
+    ON usuarios (fecha_creacion DESC);
+
+-- ---------- CODIGOS VERIFICACION ----------
+CREATE INDEX idx_codigos_busqueda
+    ON codigos_verificacion (email, codigo, tipo, usado, fecha_expiracion, fecha_creacion DESC);
+
+CREATE INDEX idx_codigos_invalidar
+    ON codigos_verificacion (email, tipo, usado);
+
+-- ---------- AUDITORIA ----------
+CREATE INDEX idx_auditoria_usuario_fecha
+    ON auditoria_usuario (usuario_id, fecha_evento DESC);
+
+-- ---------- POSTS ----------
+CREATE INDEX idx_posts_activos_fecha
+    ON posts (eliminado, fecha_creacion DESC);
+
+CREATE INDEX idx_posts_categoria_activos
+    ON posts (categoria, eliminado, fecha_creacion DESC);
+
+CREATE INDEX idx_posts_autor_activos
+    ON posts (autor_id, eliminado, fecha_creacion DESC);
+
+CREATE INDEX idx_posts_compartidos
+    ON posts (eliminado, total_compartidos DESC, fecha_creacion DESC);
+
+CREATE INDEX idx_posts_eliminados_fecha
+    ON posts (eliminado, fecha_eliminacion DESC);
+
+-- ---------- COMENTARIOS ----------
+CREATE INDEX idx_comentarios_post_activos
+    ON comentarios (post_id, eliminado, fecha_creacion ASC);
+
+CREATE INDEX idx_comentarios_autor_fecha
+    ON comentarios (autor_id, eliminado, fecha_creacion DESC);
+
+-- ---------- RESPUESTAS ----------
+CREATE INDEX idx_respuestas_comentario_activas
+    ON respuestas_comentarios (comentario_id, eliminado, fecha_creacion ASC);
+
+CREATE INDEX idx_respuestas_autor_fecha
+    ON respuestas_comentarios (autor_id, eliminado, fecha_creacion DESC);
+
+-- ---------- REACCIONES ----------
+CREATE INDEX idx_reacciones_post_tipo
+    ON reacciones (post_id, tipo);
+
+CREATE INDEX idx_reacciones_comentario_tipo
+    ON reacciones (comentario_id, tipo);
+
+CREATE INDEX idx_reacciones_usuario_fecha
+    ON reacciones (usuario_id, fecha_creacion DESC);
+
+-- ---------- REACCIONES RESPUESTAS ----------
+CREATE INDEX idx_reacciones_respuesta_tipo
+    ON reacciones_respuestas (respuesta_id, tipo);
+
+-- ---------- MENSAJES ----------
+CREATE INDEX idx_mensajes_conversacion
+    ON mensajes (emisor_id, receptor_id, fecha_envio DESC);
+
+CREATE INDEX idx_mensajes_conversacion_inv
+    ON mensajes (receptor_id, emisor_id, fecha_envio DESC);
+
+CREATE INDEX idx_mensajes_no_leidos
+    ON mensajes (receptor_id, leido, fecha_envio DESC);
+
+CREATE INDEX idx_mensajes_ultimo
+    ON mensajes (emisor_id, receptor_id, fecha_envio DESC, eliminado);
+
+-- ---------- SOLICITUDES CONTACTO ----------
+CREATE INDEX idx_solicitudes_receptor_estado
+    ON solicitudes_contacto (receptor_id, estado, fecha_solicitud DESC);
+
+CREATE INDEX idx_solicitudes_emisor_estado
+    ON solicitudes_contacto (emisor_id, estado, fecha_solicitud DESC);
+
+CREATE INDEX idx_solicitudes_contactos
+    ON solicitudes_contacto (emisor_id, receptor_id, estado);
+
+-- ---------- BLOQUEOS ----------
+CREATE INDEX idx_bloqueos_bloqueador_activo
+    ON bloqueos (usuario_bloqueador_id, activo, fecha_creacion DESC);
+
+CREATE INDEX idx_bloqueos_bloqueado_activo
+    ON bloqueos (usuario_bloqueado_id, activo, fecha_creacion DESC);
+
+CREATE INDEX idx_bloqueos_bidireccional
+    ON bloqueos (usuario_bloqueador_id, usuario_bloqueado_id, activo);
+
+-- ---------- GRUPOS CHAT ----------
+CREATE INDEX idx_grupos_activos_fecha
+    ON grupos_chat (activo, fecha_creacion DESC);
+
+CREATE INDEX idx_grupos_publicos_activos
+    ON grupos_chat (tipo, activo, fecha_creacion DESC);
+
+CREATE INDEX idx_grupos_creador_activos
+    ON grupos_chat (creador_id, activo, fecha_creacion DESC);
+
+-- ---------- MIEMBROS GRUPO ----------
+CREATE INDEX idx_miembros_grupo_estado
+    ON miembros_grupo (grupo_id, estado, fecha_union ASC);
+
+CREATE INDEX idx_miembros_grupo_usuario_estado
+    ON miembros_grupo (grupo_id, usuario_id, estado);
+
+CREATE INDEX idx_miembros_usuario_estado_rol
+    ON miembros_grupo (usuario_id, estado, rol);
+
+CREATE INDEX idx_miembros_usuario_pendientes
+    ON miembros_grupo (usuario_id, estado, fecha_invitacion DESC);
+
+-- ---------- MENSAJES GRUPO ----------
+CREATE INDEX idx_mensajes_grupo_fecha
+    ON mensajes_grupo (grupo_id, eliminado, fecha_envio ASC);
+
+CREATE INDEX idx_mensajes_grupo_ultimo
+    ON mensajes_grupo (grupo_id, fecha_envio DESC, eliminado);
+
+CREATE INDEX idx_mensajes_grupo_emisor
+    ON mensajes_grupo (grupo_id, emisor_id, fecha_envio DESC);
+
+-- ---------- INVITACIONES LINK ----------
+CREATE INDEX idx_invitaciones_token_activo
+    ON invitaciones_grupo_link (token, activo);
+
+CREATE INDEX idx_invitaciones_grupo_activo_fecha
+    ON invitaciones_grupo_link (grupo_id, activo, fecha_creacion DESC);
+
+-- ---------- HISTORIAL GRUPO ----------
+CREATE INDEX idx_historial_grupo_fecha
+    ON grupo_historial (grupo_id, fecha DESC);
+
+CREATE INDEX idx_historial_grupo_accion_fecha
+    ON grupo_historial (grupo_id, accion, fecha DESC);
+
+-- ---------- NOTIFICACIONES ----------
+CREATE INDEX idx_notificaciones_usuario_fecha
+    ON notificaciones (usuario_destino_id, fecha_creacion DESC);
+
+CREATE INDEX idx_notificaciones_usuario_no_leidas
+    ON notificaciones (usuario_destino_id, leida, fecha_creacion DESC);
+
+CREATE INDEX idx_notificaciones_usuario_tipo_no_leidas
+    ON notificaciones (usuario_destino_id, tipo, leida);
+
+-- ---------- MARCOS ----------
+CREATE INDEX idx_marcos_activos_fecha
+    ON marcos_personalizados (activo, fecha_creacion DESC);
+
+CREATE INDEX idx_marcos_activos_gratis
+    ON marcos_personalizados (activo, gratis, fecha_creacion DESC);
+
+CREATE INDEX idx_marcos_tipo_activos
+    ON marcos_personalizados (tipo, activo, fecha_creacion DESC);
+
+-- ---------- FONDOS ----------
+CREATE INDEX idx_fondos_activos_fecha
+    ON fondos_personalizados (activo, fecha_creacion DESC);
+
+CREATE INDEX idx_fondos_activos_gratis
+    ON fondos_personalizados (activo, gratis, fecha_creacion DESC);
+
+-- ---------- COMPRAS ----------
+CREATE INDEX idx_compras_usuario_fecha
+    ON compras_usuario (usuario_id, fecha_compra DESC);
+
+CREATE INDEX idx_compras_usuario_tipo_item
+    ON compras_usuario (usuario_id, tipo, item_id);
+
+-- ---------- DOCUMENTOS ----------
+CREATE INDEX idx_documentos_activos_fecha
+    ON documentos (activo, fecha_creacion DESC);
+
+CREATE INDEX idx_documentos_categoria_activos
+    ON documentos (categoria, activo, fecha_creacion DESC);
+
+CREATE INDEX idx_documentos_usuario_activos
+    ON documentos (usuario_id, activo, fecha_creacion DESC);
+
+-- ---------- RECURSOS BIBLIOTECA ----------
+CREATE INDEX idx_recursos_activos_fecha
+    ON recursos_biblioteca (activo, es_usuario, fecha_agregado DESC);
+
+CREATE INDEX idx_recursos_categoria_activos
+    ON recursos_biblioteca (categoria, activo, fecha_agregado DESC);
+
+CREATE INDEX idx_recursos_usuario_activos
+    ON recursos_biblioteca (usuario_id, activo, fecha_agregado DESC);
+
+CREATE INDEX idx_recursos_destacados
+    ON recursos_biblioteca (destacado, activo, es_usuario, fecha_agregado DESC);
+
+-- ---------- REPORTES ----------
+CREATE INDEX idx_reportes_estado_fecha
+    ON reportes (estado, fecha_creacion DESC);
+
+CREATE INDEX idx_reportes_tipo_estado
+    ON reportes (tipo_reporte, estado, fecha_creacion DESC);
+
+CREATE INDEX idx_reportes_reportante_fecha
+    ON reportes (usuario_reportante_id, fecha_creacion DESC);
+
+CREATE INDEX idx_reportes_reportado_fecha
+    ON reportes (usuario_reportado_id, fecha_creacion DESC);
+
+-- ---------- COMPARTIDOS ----------
+CREATE INDEX idx_compartidos_post_fecha
+    ON compartidos (post_id, fecha_creacion DESC);
+
+CREATE INDEX idx_compartidos_usuario_fecha
+    ON compartidos (usuario_id, fecha_creacion DESC);
+
+CREATE INDEX idx_compartidos_usuario_post
+    ON compartidos (usuario_id, post_id);
+
+
+
+
+
+
+-- ============================================================
+-- VISTAS PARA REPORTES
+-- ============================================================
+
+-- 1. Estadísticas generales del sistema
+CREATE OR REPLACE VIEW v_estadisticas_generales AS
+SELECT
+    (SELECT COUNT(*) FROM usuarios WHERE eliminado = FALSE)                    AS total_usuarios,
+    (SELECT COUNT(*) FROM usuarios WHERE email_verificado = TRUE)              AS usuarios_verificados,
+    (SELECT COUNT(*) FROM usuarios WHERE en_linea = TRUE)                      AS usuarios_en_linea,
+    (SELECT COUNT(*) FROM usuarios WHERE activo = TRUE AND eliminado = FALSE)  AS usuarios_activos,
+    (SELECT COUNT(*) FROM posts WHERE eliminado = FALSE)                       AS total_posts,
+    (SELECT COUNT(*) FROM comentarios WHERE eliminado = FALSE)                 AS total_comentarios,
+    (SELECT COUNT(*) FROM grupos_chat WHERE activo = TRUE)                     AS total_grupos,
+    (SELECT COUNT(*) FROM mensajes WHERE eliminado = FALSE)                    AS total_mensajes,
+    (SELECT COUNT(*) FROM documentos WHERE activo = TRUE)                      AS total_documentos,
+    (SELECT COUNT(*) FROM recursos_biblioteca WHERE activo = TRUE)             AS total_recursos,
+    (SELECT COUNT(*) FROM reportes WHERE estado = 'PENDIENTE')                 AS reportes_pendientes,
+    (SELECT COUNT(*) FROM compartidos)                                         AS total_compartidos,
+    (SELECT COUNT(*) FROM notificaciones WHERE leida = FALSE)                  AS notificaciones_no_leidas,
+    NOW()                                                                      AS fecha_consulta;
+
+-- 2. Recursos biblioteca con creador
+CREATE OR REPLACE VIEW v_recursos_biblioteca AS
+SELECT
+    r.id, r.usuario_id, r.es_usuario, r.titulo, r.descripcion, r.url,
+    r.categoria, r.subcategoria, r.imagen, r.autor, r.plataforma,
+    r.duracion, r.nivel, r.destacado, r.activo, r.tags,
+    r.fecha_agregado, r.fecha_actualizacion,
+    u.nombre_usuario  AS creador_nombre,
+    u.foto_perfil_url AS creador_foto
+FROM recursos_biblioteca r
+LEFT JOIN usuarios u ON r.usuario_id = u.id
+WHERE r.activo = TRUE;
+
+-- 3. Reportes pendientes (panel admin)
+CREATE OR REPLACE VIEW v_reportes_pendientes AS
+SELECT
+    r.id,
+    r.tipo_reporte,
+    r.motivo,
+    r.descripcion,
+    r.estado,
+    r.fecha_creacion,
+    ur.id              AS reportante_id,
+    ur.nombre_usuario  AS reportante_nombre,
+    ud.id              AS reportado_id,
+    ud.nombre_usuario  AS reportado_nombre,
+    p.titulo           AS post_titulo,
+    c.contenido        AS comentario_contenido
+FROM reportes r
+JOIN usuarios ur ON r.usuario_reportante_id = ur.id
+LEFT JOIN usuarios ud ON r.usuario_reportado_id = ud.id
+LEFT JOIN posts p ON r.post_id = p.id
+LEFT JOIN comentarios c ON r.comentario_id = c.id
+WHERE r.estado IN ('PENDIENTE', 'REVISANDO')
+ORDER BY r.fecha_creacion ASC;
+
+
+
+
+
+
+
+
+-- ============================================================
+-- PROCEDIMIENTOS ALMACENADOS (solo para reportes admin)
+-- ============================================================
+
+DELIMITER $$
+
+-- 1. Estadísticas de un usuario en un rango de fechas
+CREATE PROCEDURE sp_estadisticas_usuario(
+    IN p_usuario_id BIGINT,
+    IN p_desde DATE,
+    IN p_hasta DATE
+)
+BEGIN
+    SELECT
+        u.id,
+        u.nombre_usuario,
+        COUNT(DISTINCT p.id)             AS total_posts,
+        COUNT(DISTINCT c.id)             AS total_comentarios,
+        COUNT(DISTINCT r.id)             AS total_reacciones,
+        COUNT(DISTINCT s.id)             AS total_solicitudes_enviadas,
+        COUNT(DISTINCT m.id)             AS total_grupos
+    FROM usuarios u
+    LEFT JOIN posts p ON p.autor_id = u.id
+        AND p.fecha_creacion BETWEEN p_desde AND p_hasta
+        AND p.eliminado = FALSE
+    LEFT JOIN comentarios c ON c.autor_id = u.id
+        AND c.fecha_creacion BETWEEN p_desde AND p_hasta
+        AND c.eliminado = FALSE
+    LEFT JOIN reacciones r ON r.usuario_id = u.id
+        AND r.fecha_creacion BETWEEN p_desde AND p_hasta
+    LEFT JOIN solicitudes_contacto s ON s.emisor_id = u.id
+        AND s.fecha_solicitud BETWEEN p_desde AND p_hasta
+    LEFT JOIN miembros_grupo m ON m.usuario_id = u.id
+        AND m.estado = 'ACTIVO'
+    WHERE u.id = p_usuario_id
+    GROUP BY u.id;
+END$$
+
+-- 2. Top posts más populares en un rango de fechas
+CREATE PROCEDURE sp_top_posts(
+    IN p_desde DATE,
+    IN p_hasta DATE,
+    IN p_limite INT
+)
+BEGIN
+    SELECT
+        p.id,
+        p.titulo,
+        p.categoria,
+        u.nombre_usuario  AS autor,
+        p.total_compartidos,
+        (SELECT COUNT(*) FROM reacciones WHERE post_id = p.id)     AS total_reacciones,
+        (SELECT COUNT(*) FROM comentarios WHERE post_id = p.id AND eliminado = FALSE) AS total_comentarios
+    FROM posts p
+    JOIN usuarios u ON p.autor_id = u.id
+    WHERE p.eliminado = FALSE
+      AND p.fecha_creacion BETWEEN p_desde AND p_hasta
+    ORDER BY p.total_compartidos DESC
+    LIMIT p_limite;
+END$$
+
+DELIMITER ;
+
+
+
+
+
+
+
+-- ============================================================
+-- INSERCIÓN MASIVA: RECURSOS BIBLIOTECA
+-- ============================================================
+-- Todos los recursos son GLOBALES (usuario_id = NULL, es_usuario = FALSE)
+-- para que todos los usuarios los vean.
+
+INSERT INTO recursos_biblioteca
+    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
+     autor, plataforma, duracion, nivel, destacado, activo, tags)
+VALUES
+
+-- ============================================================
+-- EDUCACIÓN / CURSOS
+-- ============================================================
+(NULL, FALSE,
+ 'Class Central',
+ 'Buscador gratuito de cursos online (MOOCs) de las mejores universidades y plataformas del mundo como Coursera, edX, Udemy, FutureLearn y Khan Academy. Permite filtrar por tema, universidad, idioma, nivel, duración y certificación. Incluye reseñas de usuarios.',
+ 'https://www.classcentral.com/',
+ 'educacion', 'Cursos Online', 'Class Central', 'Class Central', NULL, 'principiante', TRUE, TRUE,
+ 'cursos,mooc,educacion,online,coursera,edx,udemy,universidades,certificados,aprendizaje,gratis,buscador'),
+
+(NULL, FALSE,
+ 'SQL - Curso completo gratis',
+ 'Curso completo de SQL gratuito. Aprende desde cero a consultar, filtrar, ordenar y manipular bases de datos relacionales. Incluye certificación al finalizar.',
+ 'https://www.aprendesql.dev/',
+ 'educacion', 'Bases de Datos', 'AprendeSQL.dev', 'AprendeSQL.dev', '30h', 'principiante', TRUE, TRUE,
+ 'sql,basesdedatos,curso,certificacion,gratis'),
+
+(NULL, FALSE,
+ 'Power BI - Introducción',
+ 'Curso gratuito de introducción a Power BI. Aprende a crear dashboards, visualizaciones y análisis de datos con la herramienta de Business Intelligence de Microsoft. Incluye certificación.',
+ 'https://capacitacionlaboral.trabajo.gob.pe/cursos/introduccion-al-power-bi/',
+ 'educacion', 'Business Intelligence', 'Ministerio de Trabajo', 'Capacitacion Laboral', '20h', 'principiante', TRUE, TRUE,
+ 'powerbi,bi,businessintelligence,datos,dashboards,certificacion,gratis'),
+
+(NULL, FALSE,
+ 'Inglés A2 para desarrolladores',
+ 'Curso de inglés nivel A2 orientado a desarrolladores. Aprende vocabulario técnico, comprensión lectora y comunicación básica en el ámbito tecnológico. Incluye certificación.',
+ 'http://midu.link/ingles-a2',
+ 'educacion', 'Idiomas', 'freeCodeCamp.org', 'freeCodeCamp.org', '40h', 'principiante', TRUE, TRUE,
+ 'ingles,a2,idiomas,desarrolladores,freecodecamp,certificacion'),
+
+(NULL, FALSE,
+ 'Gemini para estudiantes',
+ 'Certificación de Gemini para estudiantes. Aprende a usar IA (Gemini y NotebookLM) de forma responsable para potenciar tu aprendizaje y creatividad. Otorgada por Google.',
+ 'https://edu.exceedlms.com/student/path/1825254-certificacion-de-gemini-para-estudiantes',
+ 'educacion', 'Inteligencia Artificial', 'Google', 'Exceed LMS', NULL, 'principiante', TRUE, TRUE,
+ 'gemini,ia,inteligenciaartificial,google,certificacion,estudiantes'),
+
+(NULL, FALSE,
+ 'Python Fundamentals for Beginners',
+ 'Curso gratuito de fundamentos de Python para principiantes. Aprende desde cero los conceptos básicos del lenguaje, estructuras de control, funciones y más.',
+ 'https://www.mygreatlearning.com/academy/learn-for-free/courses/python-fundamentals-for-beginners',
+ 'educacion', 'Programación', 'Great Learning', 'Great Learning Academy', NULL, 'principiante', TRUE, TRUE,
+ 'python,programacion,principiante,fundamentos,curso,gratis'),
+
+(NULL, FALSE,
+ 'NB Chemical Experiments (NoBook Chemistry)',
+ 'Plataforma de simulaciones interactivas de laboratorio de química. Incluye más de 30 experimentos virtuales como titulación ácido-base, combustión del metano, electrólisis, filtrado, destilación, reacciones redox, obtención de gases (O₂, Cl₂), etc.',
+ 'https://singapore-chemistry.nobook.com/#/console/templates/resource',
+ 'educacion', 'Quimica', 'NoBook', 'NoBook Chemistry', NULL, 'intermedio', TRUE, TRUE,
+ 'quimica,laboratorio,simulacion,experimentos,educacion,ciencia,titulacion,electrolisis,reacciones,gases,estudiantes,docentes,interactivo'),
+
+-- ============================================================
+-- CIBERSEGURIDAD
+-- ============================================================
+(NULL, FALSE,
+ 'Hack The Box',
+ 'Plataforma de ciberseguridad para practicar hacking ético y pentesting mediante laboratorios y máquinas virtuales vulnerables. Incluye retos, challenges, academias y competiciones CTF. Ideal para aprender seguridad ofensiva desde principiante hasta avanzado.',
+ 'https://www.hackthebox.com/',
+ 'ciberseguridad', 'Hacking Ético', 'Hack The Box', 'Hack The Box', NULL, 'principiante', TRUE, TRUE,
+ 'ciberseguridad,hacking,pentesting,ctf,laboratorios,seguridad,ofensiva,ethicalhacking,maquinas,retos'),
+
+(NULL, FALSE,
+ 'Ethical Hacker - Cisco NetAcad',
+ 'Curso oficial de Cisco Networking Academy sobre hacking ético y ciberseguridad. Aprende a identificar vulnerabilidades, realizar pruebas de penetración, análisis de amenazas y defender sistemas de forma legal y ética.',
+ 'https://www.netacad.com/courses/ethical-hacker?courseLang=en-US',
+ 'ciberseguridad', 'Hacking Ético', 'Cisco Networking Academy', 'Cisco NetAcad', NULL, 'intermedio', TRUE, TRUE,
+ 'ciberseguridad,hacking,etico,ethicalhacker,cisco,netacad,seguridad,penetracion,certificacion,redes,informatica'),
+
+(NULL, FALSE,
+ 'TryHackMe - Pre Security Path',
+ 'Ruta de aprendizaje gratuita de TryHackMe diseñada para principiantes absolutos en ciberseguridad. Cubre los fundamentos de redes, Linux, Windows, herramientas de hacking, criptografía y seguridad web. Ideal como primer paso antes de rutas más avanzadas.',
+ 'https://tryhackme.com/path/outline/presecurity',
+ 'ciberseguridad', 'Hacking Ético', 'TryHackMe', 'TryHackMe', '~30h', 'principiante', TRUE, TRUE,
+ 'ciberseguridad,hacking,etico,tryhackme,presecurity,principiante,redes,linux,seguridad,pentesting,free'),
+
+-- ============================================================
+-- INTELIGENCIA ARTIFICIAL - ASISTENTES
+-- ============================================================
+(NULL, FALSE,
+ 'ChatGPT',
+ 'Asistente de inteligencia artificial desarrollado por OpenAI. Permite conversar, generar texto, programar, analizar imágenes, crear contenido y resolver problemas. Ofrece versión gratuita y planes de pago con modelos avanzados como GPT-4o.',
+ 'https://chatgpt.com/',
+ 'inteligencia-artificial', 'Asistentes IA', 'OpenAI', 'ChatGPT', NULL, 'principiante', TRUE, TRUE,
+ 'ia,chatbot,asistente,openai,chatgpt,gpt4,texto,codigo,imagenes,gratis,llm'),
+
+(NULL, FALSE,
+ 'Google Gemini',
+ 'Asistente de inteligencia artificial multimodal desarrollado por Google. Integrado con servicios como Gmail, Docs y YouTube. Capaz de procesar texto, imágenes, audio y video. Ofrece versión gratuita y planes avanzados con Gemini Pro y Ultra.',
+ 'https://gemini.google.com/app',
+ 'inteligencia-artificial', 'Asistentes IA', 'Google', 'Gemini', NULL, 'principiante', TRUE, TRUE,
+ 'ia,chatbot,asistente,google,gemini,multimodal,texto,imagenes,audio,video,gratis,llm'),
+
+(NULL, FALSE,
+ 'Claude',
+ 'Asistente de inteligencia artificial desarrollado por Anthropic. Destacado por su capacidad de razonamiento, análisis de documentos extensos y conversaciones naturales. Modelo enfocado en seguridad y alineación.',
+ 'https://claude.ai/new',
+ 'inteligencia-artificial', 'Asistentes IA', 'Anthropic', 'Claude', NULL, 'principiante', TRUE, TRUE,
+ 'ia,chatbot,asistente,anthropic,claude,razonamiento,documentos,codigo,gratis,llm'),
+
+(NULL, FALSE,
+ 'DeepSeek',
+ 'Asistente de inteligencia artificial gratuito desarrollado por DeepSeek. Capaz de responder preguntas, generar texto, programar, analizar documentos y razonar sobre problemas complejos. Modelo open source con excelente rendimiento en matemáticas y código.',
+ 'https://www.deepseek.com/en/',
+ 'inteligencia-artificial', 'Asistentes IA', 'DeepSeek', 'DeepSeek', NULL, 'principiante', TRUE, TRUE,
+ 'ia,chatbot,asistente,deepseek,openSource,codigo,matematicas,gratis,razonamiento,llm'),
+
+(NULL, FALSE,
+ 'Microsoft Copilot',
+ 'Asistente de inteligencia artificial desarrollado por Microsoft basado en modelos GPT. Integrado con Windows, Edge, Bing y Microsoft 365. Capaz de generar texto, imágenes, código y responder consultas en tiempo real con acceso a internet.',
+ 'https://copilot.microsoft.com/',
+ 'inteligencia-artificial', 'Asistentes IA', 'Microsoft', 'Copilot', NULL, 'principiante', TRUE, TRUE,
+ 'ia,chatbot,asistente,microsoft,copilot,windows,bing,edge,texto,imagenes,codigo,gratis,llm'),
+
+(NULL, FALSE,
+ 'Qwen Chat',
+ 'Asistente de inteligencia artificial desarrollado por Alibaba Cloud. Modelo multimodal capaz de generar texto, código, imágenes y razonar sobre problemas complejos. Disponible en versión web y app, con planes gratuitos y de pago.',
+ 'https://chat.qwen.ai/',
+ 'inteligencia-artificial', 'Asistentes IA', 'Alibaba Cloud', 'Qwen', NULL, 'principiante', TRUE, TRUE,
+ 'ia,chatbot,asistente,qwen,alibaba,multimodal,codigo,texto,imagenes,gratis,llm'),
+
+(NULL, FALSE,
+ 'Kimi',
+ 'Asistente de inteligencia artificial desarrollado por Moonshot AI. Especializado en el procesamiento de contextos muy largos, capaz de analizar documentos extensos, libros y conversaciones prolongadas. Disponible en web y app, con versión gratuita.',
+ 'https://www.kimi.ai/es-419',
+ 'inteligencia-artificial', 'Asistentes IA', 'Moonshot AI', 'Kimi', NULL, 'principiante', FALSE, TRUE,
+ 'ia,chatbot,asistente,kimi,moonshot,contextolargo,documentos,texto,gratis,llm'),
+
+(NULL, FALSE,
+ 'Grok',
+ 'Asistente de inteligencia artificial desarrollado por xAI (Elon Musk). Integrado con la red social X (Twitter), con acceso a información en tiempo real. Capaz de generar texto, imágenes y razonar con un estilo más desenfadado.',
+ 'https://grok.com/',
+ 'inteligencia-artificial', 'Asistentes IA', 'xAI', 'Grok', NULL, 'principiante', FALSE, TRUE,
+ 'ia,chatbot,asistente,xai,grok,elonmusk,twitter,x,tiemporeal,texto,imagenes,llm'),
+
+-- ============================================================
+-- IA - BUSCADORES Y HERRAMIENTAS
+-- ============================================================
+(NULL, FALSE,
+ 'Perplexity AI',
+ 'Motor de búsqueda conversacional con inteligencia artificial. Responde preguntas citando fuentes en tiempo real de la web. Ideal para investigación, estudio y verificación de información. Ofrece versión gratuita y planes Pro.',
+ 'https://www.perplexity.ai/',
+ 'inteligencia-artificial', 'Buscadores IA', 'Perplexity AI', 'Perplexity', NULL, 'principiante', TRUE, TRUE,
+ 'ia,buscador,investigacion,perplexity,fuentes,tiemporeal,estudio,texto,gratis,llm'),
+
+(NULL, FALSE,
+ 'Gemini Notebook (NotebookLM)',
+ 'Asistente de investigación basado en IA desarrollado por Google. Permite subir documentos, notas y fuentes propias para generar resúmenes, mapas mentales, cuestionarios, tarjetas didácticas y resúmenes de audio en formato pódcast.',
+ 'https://notebook.google/?hl=es',
+ 'inteligencia-artificial', 'Investigacion y Estudio', 'Google', 'Gemini Notebook', NULL, 'intermedio', TRUE, TRUE,
+ 'ia,investigacion,estudio,notas,gemini,google,notebooklm,resumenes,mapasmentales,cuestionarios,podcast,documentos,productividad'),
+
+(NULL, FALSE,
+ 'Toolify.ai',
+ 'Directorio con más de 10,000 herramientas de Inteligencia Artificial organizadas por categorías. Incluye generadores de imágenes, video, audio, texto, asistentes, agentes, automatización, marketing, productividad, diseño, código y mucho más.',
+ 'https://www.toolify.ai/',
+ 'inteligencia-artificial', 'Directorio IA', 'Toolify', 'Toolify.ai', NULL, 'principiante', TRUE, TRUE,
+ 'ia,inteligenciaartificial,herramientas,ai,tools,directorio,chatgpt,gpt,imagenes,video,audio,texto,automatizacion,productividad'),
+
+(NULL, FALSE,
+ 'OpenCode',
+ 'Agente de programación con IA open source para terminal, IDE o escritorio. Soporta +75 proveedores de LLM (Claude, GPT, Gemini, modelos locales), carga automática de LSP, múltiples sesiones paralelas, enlaces compartibles, integración con GitHub Copilot.',
+ 'https://opencode.ai/',
+ 'inteligencia-artificial', 'Herramientas IA', 'OpenCode', 'OpenCode', NULL, 'intermedio', TRUE, TRUE,
+ 'ia,inteligenciaartificial,programacion,codigo,agente,opensource,terminal,ide,claude,gpt,gemini,copilot,desarrollo,llm'),
+
+-- ============================================================
+-- TECNOLOGÍA - UTILIDADES Y SOFTWARE
+-- ============================================================
+(NULL, FALSE,
+ 'Ventoy',
+ 'Herramienta open source para crear USB de arranque multiboot. Permite copiar múltiples archivos ISO, WIM, IMG, VHD y EFI directamente a la USB y arrancar desde ellos sin formatear ni extraer. Compatible con Windows, Linux, VMware, UEFI y BIOS legacy.',
+ 'https://www.ventoy.net/en/index.html',
+ 'tecnologia', 'Utilidades y Software', 'Ventoy', 'Ventoy', NULL, 'intermedio', TRUE, TRUE,
+ 'usb,multiboot,iso,arranque,booteable,linux,windows,opensource,utilidades,instalacion,rescate,sistemas'),
+
+(NULL, FALSE,
+ 'Rufus',
+ 'Utilidad gratuita y open source para formatear y crear soportes USB de arranque (pendrives, tarjetas de memoria, etc.). Permite crear medios de instalación desde ISOs arrancables de Windows, Linux y UEFI.',
+ 'https://rufus.ie/es/',
+ 'tecnologia', 'Utilidades y Software', 'Pete Batard', 'Rufus', NULL, 'intermedio', TRUE, TRUE,
+ 'usb,booteable,iso,formateo,arranque,windows,linux,uefi,bios,firmware,opensource,portable,utilidades,instalacion'),
+
+(NULL, FALSE,
+ 'OptiProjects',
+ 'Proyectos y utilidades para optimizar Windows: backports de navegadores (Brave, Chrome, Firefox, VSCode, Steam) para Win7/8.1/XP, drivers optimizados para Intel iGPU, drivers para Canaimas venezolanas, emulación de tarjeta gráfica por CPU, Hiren''s Boot.',
+ 'https://optijuegos.net/',
+ 'tecnologia', 'Optimizacion Windows', 'OptiProjects', 'OptiProjects', NULL, 'avanzado', TRUE, TRUE,
+ 'windows,optimizacion,backport,drivers,winxp,win7,win8,navegadores,steam,vscode,hirens,utilidades,software,legacy,pcretr,canaimas'),
+
+(NULL, FALSE,
+ '4Download',
+ 'Directorio de software para Windows, macOS y Linux. Incluye aplicaciones de productividad, edición multimedia, diseño gráfico, desarrollo, librerías de audio (KONTAKT, VST), plugins y utilidades.',
+ 'https://4download.net/',
+ 'tecnologia', 'Directorio Software', '4Download', '4Download', NULL, 'principiante', FALSE, TRUE,
+ 'software,descargas,windows,macos,linux,plugins,audio,produccion,edicion,diseño,desarrollo,utilidades,directorio'),
+
+(NULL, FALSE,
+ 'Technical.city',
+ 'Comparaciones, especificaciones y ranking de tarjetas gráficas y procesadores. Incluye benchmarks, comparativas detalladas de GPUs y CPUs de sobremesa, móviles y profesionales, con las novedades más recientes.',
+ 'https://technical.city/es',
+ 'tecnologia', 'Hardware', 'Technical.city', 'Technical.city', NULL, 'avanzado', TRUE, TRUE,
+ 'hardware,gpu,cpu,tarjetasgraficas,procesadores,benchmark,comparativas,ranking,especificaciones,amd,intel,nvidia,pc,gaming'),
+
+(NULL, FALSE,
+ 'iFixit en Español',
+ 'Comunidad y plataforma gratuita de reparación de dispositivos electrónicos. Ofrece miles de guías paso a paso, tutoriales con imágenes y videos, herramientas y foros para reparar celulares, laptops, tablets, consolas y electrodomésticos.',
+ 'https://es.ifixit.com/',
+ 'tecnologia', 'Reparación y Hardware', 'iFixit', 'iFixit', NULL, 'principiante', TRUE, TRUE,
+ 'reparacion,hardware,electronica,guias,tutoriales,diy,celulares,laptops,derechoareparar,sostenibilidad'),
+
+(NULL, FALSE,
+ 'Alpha Coders - Code Wallpapers',
+ 'Colección gratuita de más de 70 fondos de pantalla en HD y 4K con temática de programación y código. Incluye wallpapers de lenguajes como Python, JavaScript, binario, terminales y tecnología. Descarga en múltiples resoluciones hasta 7680x4320.',
+ 'https://alphacoders.com/code-wallpapers',
+ 'tecnologia', 'Fondos de Pantalla', 'Alpha Coders', 'Alpha Coders', NULL, 'principiante', FALSE, TRUE,
+ 'wallpapers,fondos,pantalla,hd,4k,codigo,programacion,python,javascript,tecnologia,desarrollo'),
+
+-- ============================================================
+-- DISEÑO
+-- ============================================================
+(NULL, FALSE,
+ 'Photopea',
+ 'Editor de imágenes y gráficos online gratuito que funciona directamente en el navegador. Compatible con archivos PSD, XCF, Sketch, XD y CDR, además de formatos comunes como PNG, JPG, GIF y SVG. Alternativa gratuita a Photoshop con capas, máscaras y filtros.',
+ 'https://www.photopea.com/',
+ 'diseno', 'Edicion de Imagenes', 'Ivan Kutskir', 'Photopea', NULL, 'principiante', TRUE, TRUE,
+ 'diseno,edicion,imagenes,photoshop,psd,editor,graficos,online,gratis,capas,fotografia,recursos'),
+
+-- ============================================================
+-- ENTRETENIMIENTO
+-- ============================================================
+(NULL, FALSE,
+ 'Viper Play TV',
+ 'Plataforma gratuita para ver partidos de fútbol en vivo. Incluye la Liga Profesional Argentina, Copa Libertadores, Copa Sudamericana y las ligas más importantes de Europa. Sin registro y sin costo.',
+ 'https://viper.pages.dev/',
+ 'entretenimiento', 'Deportes', 'Viper Play', 'Viper Play TV', NULL, 'principiante', FALSE, TRUE,
+ 'futbol,deportes,envivo,streaming,gratis,libertadores,sudamericana,ligaargentina,europa,partidos'),
+
+(NULL, FALSE,
+ 'Roja TV Directa',
+ 'Plataforma de streaming deportivo en vivo. Transmite partidos de fútbol y otros eventos deportivos en directo de forma gratuita.',
+ 'https://rojatvdirecta.online/',
+ 'entretenimiento', 'Deportes', 'Roja TV', 'Roja TV Directa', NULL, 'principiante', FALSE, TRUE,
+ 'futbol,deportes,envivo,streaming,gratis,partidos,roja,tv,directo'),
+
+(NULL, FALSE,
+ 'Futbol Libre TV Directa',
+ 'Plataforma de streaming deportivo en vivo. Transmite partidos de fútbol y otros eventos deportivos en directo de forma gratuita.',
+ 'https://futbollibrefullhd.org/',
+ 'entretenimiento', 'Deportes', 'Futbol libre', 'futbol Directa', NULL, 'principiante', FALSE, TRUE,
+ 'futbol,deportes,envivo,streaming,gratis,partidos,directo'),
+
+(NULL, FALSE,
+ 'WallpaperCave',
+ 'Plataforma gratuita con una enorme colección de fondos de pantalla en alta definición para PC, celulares y tablets. Organizados por categorías como anime, videojuegos, películas, deportes, naturaleza, autos y más. Descarga directa sin registro.',
+ 'https://wallpapercave.com/',
+ 'entretenimiento', 'Fondos de Pantalla', 'WallpaperCave', 'WallpaperCave', NULL, 'principiante', FALSE, TRUE,
+ 'wallpapers,fondos,pantalla,hd,4k,anime,videojuegos,peliculas,descargas,gratis'),
+
+(NULL, FALSE,
+ 'Wallpaper Mobi',
+ 'Plataforma gratuita con una amplia colección de fondos de pantalla para celulares y tablets. Organizados por categorías como anime, videojuegos, autos, naturaleza, abstractos, deportes y más. Descarga directa en distintas resoluciones.',
+ 'https://wallpaper.mob.org/',
+ 'entretenimiento', 'Fondos de Pantalla', 'Mob.org', 'Wallpaper Mobi', NULL, 'principiante', FALSE, TRUE,
+ 'wallpapers,fondos,pantalla,movil,celular,hd,anime,videojuegos,autos,naturaleza,descargas,gratis'),
+
+(NULL, FALSE,
+ 'MoeWalls',
+ 'Plataforma gratuita de fondos de pantalla animados (live wallpapers) en HD y 4K para PC y dispositivos móviles. Incluye categorías como anime, naturaleza, abstractos, videojuegos, películas, animales y más. Compatible con Wallpaper Engine.',
+ 'https://moewalls.com/',
+ 'entretenimiento', 'Fondos de Pantalla', 'MoeWalls', 'MoeWalls', NULL, 'principiante', FALSE, TRUE,
+ 'wallpapers,fondos,pantalla,animados,livewallpaper,hd,4k,anime,naturaleza,videojuegos,wallpaperengine,descargas,gratis'),
+
+(NULL, FALSE,
+ 'Kawaii Animes',
+ 'Aplicación oficial para ver anime en línea. Versión completa sin restricciones con todas las características. Apoya el anime legal y promueve el respeto hacia los creadores y la industria.',
+ 'https://www.kawaiianimes.app/',
+ 'entretenimiento', 'Anime', 'Kawaii Animes', 'Kawaii Animes', NULL, 'principiante', FALSE, TRUE,
+ 'anime,kawaii,entretenimiento,streaming,peliculas,series,japones,otaku,ver,online,app'),
+
+(NULL, FALSE,
+ 'Minecraft Wiki',
+ 'La comunidad hispana más grande que recopila información sobre la franquicia de Minecraft. Incluye guías, tutoriales, bloques, criaturas, biomas, actualizaciones y todo lo que necesitas saber sobre el juego. Más de 5677 artículos actualizados.',
+ 'https://es.minecraft.wiki/',
+ 'entretenimiento', 'Videojuegos', 'Comunidad Minecraft Wiki', 'Minecraft Wiki', NULL, 'principiante', FALSE, TRUE,
+ 'minecraft,juego,videojuegos,wiki,guia,tutorial,mojang,sandbox,aventura'),
+
+(NULL, FALSE,
+ 'MinecraftSearch',
+ 'Buscador avanzado de Minecraft con más de 2000 objetos, criaturas, bloques, biomas y estructuras. Incluye recetas de crafteo, drops, intercambios, estadísticas, mapa de semillas, planificador de encantamientos y soporte para Java 26.3 y Bedrock 1.26.51.',
+ 'https://minecraftsearch.com/es-ES',
+ 'entretenimiento', 'Videojuegos', 'MinecraftSearch', 'MinecraftSearch', NULL, 'principiante', FALSE, TRUE,
+ 'minecraft,juego,videojuegos,buscador,herramienta,recetas,crafteo,semillas,encantamientos,biomas,java,bedrock'),
+
+(NULL, FALSE,
+ 'Friv Legend',
+ 'Colección clásica de juegos Friv en su menú antiguo. Incluye cientos de minijuegos Flash retro: aventuras, puzzles, deportes, acción y más. Ideal para jugar en PC de escritorio con teclado y ratón. La experiencia nostálgica original de Friv.',
+ 'https://www.frivlegend.com/',
+ 'entretenimiento', 'Juegos Flash Retro', 'Friv', 'Friv Legend', NULL, 'principiante', FALSE, TRUE,
+ 'friv,juegos,flash,retro,minijuegos,nostalgia,puzzles,aventuras,deportes,accion,clasicos,navegador'),
+
+-- ============================================================
+-- HERRAMIENTAS / RECURSOS
+-- ============================================================
+(NULL, FALSE,
+ 'Flores Amarillas',
+ 'Recurso interactivo sobre flores amarillas. Incluye información, imágenes, tutoriales y contenido relacionado con esta temática.',
+ 'https://encoded.pe/floresamarillas/',
+ 'recurso', 'Educativo', 'Encoded', 'Encoded.pe', NULL, 'principiante', FALSE, TRUE,
+ 'floresamarillas,flores,educativo,recurso,encoded'),
+
+(NULL, FALSE,
+ 'Yapaitas (antes Rebajitas)',
+ 'Comparador de precios peruano gratuito. Busca un producto al mismo tiempo en varias tiendas peruanas para mostrar quién lo tiene más barato antes de comprar. Incluye seguimiento de evolución de precios, filtros por tienda.',
+ 'https://rebajitas.com/',
+ 'herramienta', 'Comparador de Precios', 'Yapaitas', 'Yapaitas', NULL, 'principiante', FALSE, TRUE,
+ 'comparador,precios,peru,compras,ofertas,tiendas,ahorro,yapaitas,rebajitas,herramienta,gratis'),
+
+(NULL, FALSE,
+ 'it''s free*',
+ 'Directorio bilingüe (español/inglés) con 116 herramientas y servicios que ofrecen capas gratuitas realmente útiles para developers, makers y equipos pequeños. Incluye 14 categorías como backend, bases de datos, IA, auth, email, monitorización, CI/CD, analítica, diseño, CMS y APIs.',
+ 'https://itsfree.dev/es',
+ 'herramienta', 'Directorio de Herramientas', 'it''s free*', 'it''s free*', NULL, 'intermedio', TRUE, TRUE,
+ 'herramientas,developers,free,recursos,directorio,backend,basededatos,ia,auth,email,monitorizacion,cicd,analitica,diseño,cms,apis,gratis,opensource');
+
+
+
+
+
+
+
+
+
+
+
+-- ============================================================
+-- AJUSTES AUTO_INCREMENT
+-- ============================================================
+ALTER TABLE usuarios              AUTO_INCREMENT = 10;
+ALTER TABLE posts                 AUTO_INCREMENT = 10;
+ALTER TABLE grupos_chat           AUTO_INCREMENT = 10;
+ALTER TABLE recursos_biblioteca   AUTO_INCREMENT = 200;
+ALTER TABLE documentos            AUTO_INCREMENT = 20;
+ALTER TABLE notificaciones        AUTO_INCREMENT = 10;
+ALTER TABLE auditoria_usuario     AUTO_INCREMENT = 100;
+ALTER TABLE codigos_verificacion  AUTO_INCREMENT = 100;
+ALTER TABLE reportes              AUTO_INCREMENT = 10;
+ALTER TABLE compartidos           AUTO_INCREMENT = 10;
+ALTER TABLE reacciones            AUTO_INCREMENT = 10;
+
+
+
+
+
+
+
+
+SHOW COLUMNS FROM codigos_verificacion;
+
+
+
