@@ -1,19 +1,18 @@
 -- ============================================================
--- KIERT DATABASE — v1.6 (COMPLETO CON INSERTS DE BIBLIOTECA)
+-- KIERT DATABASE — v2.0 (CORREGIDO Y ORDENADO PARA RENDER)
 -- ============================================================
 -- Motor: InnoDB · Charset: utf8mb4 · Zona horaria: UTC
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';
 
 DROP DATABASE IF EXISTS kiert_db;
 CREATE DATABASE kiert_db
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 USE kiert_db;
-
-SET NAMES utf8mb4;
-SET time_zone = '+00:00';
 
 -- ============================================================
 -- BLOQUE 1: USUARIOS Y AUTENTICACIÓN
@@ -31,11 +30,14 @@ CREATE TABLE usuarios (
     activo                        BOOLEAN NOT NULL DEFAULT FALSE,
     email_verificado              BOOLEAN NOT NULL DEFAULT FALSE,
     fecha_verificacion_email      TIMESTAMP NULL DEFAULT NULL,
+    en_linea                      BOOLEAN NOT NULL DEFAULT FALSE,
+    ultima_conexion               TIMESTAMP NULL DEFAULT NULL,
     eliminado                     BOOLEAN NOT NULL DEFAULT FALSE,
     fecha_eliminacion             TIMESTAMP NULL DEFAULT NULL,
     fecha_ultimo_cambio_password  TIMESTAMP NULL DEFAULT NULL,
     intentos_login_fallidos       INT NOT NULL DEFAULT 0,
     bloqueado_hasta               TIMESTAMP NULL DEFAULT NULL,
+    token_version                 INT NOT NULL DEFAULT 0,
     fecha_creacion                TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion           TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -43,7 +45,7 @@ CREATE TABLE usuarios (
 CREATE TABLE codigos_verificacion (
     id                BIGINT PRIMARY KEY AUTO_INCREMENT,
     email             VARCHAR(255) NOT NULL,
-    codigo            VARCHAR(6) NOT NULL,
+    codigo            VARCHAR(255) NOT NULL,
     tipo              VARCHAR(30) NOT NULL,
     fecha_creacion    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_expiracion  TIMESTAMP NOT NULL,
@@ -68,7 +70,7 @@ CREATE TABLE auditoria_usuario (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
--- BLOQUE 2: BIENVENIDA (depende de usuarios)
+-- BLOQUE 2: BIENVENIDA
 -- ============================================================
 
 CREATE TABLE configuracion_bienvenida (
@@ -548,6 +550,7 @@ CREATE INDEX idx_usuarios_activos_verificados ON usuarios (eliminado, activo, em
 CREATE INDEX idx_usuarios_bloqueados ON usuarios (bloqueado_hasta);
 CREATE INDEX idx_usuarios_eliminados_fecha ON usuarios (eliminado, fecha_eliminacion DESC);
 CREATE INDEX idx_usuarios_fecha_creacion ON usuarios (fecha_creacion DESC);
+CREATE INDEX idx_usuarios_en_linea ON usuarios (en_linea, ultima_conexion DESC);
 
 -- CODIGOS VERIFICACION
 CREATE INDEX idx_codigos_busqueda ON codigos_verificacion (email, codigo, tipo, usado, fecha_expiracion, fecha_creacion DESC);
@@ -768,428 +771,6 @@ INSERT INTO usuarios (
 );
 
 SET FOREIGN_KEY_CHECKS = 1;
-
--- ============================================================
--- BLOQUE 15: INSERTS DE RECURSOS DE BIBLIOTECA
--- ============================================================
-
--- ---------- ENTRETENIMIENTO / VIDEOJUEGOS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Trucos de GTA San Andreas para PC',
- 'Guía completa con todos los trucos de GTA San Andreas para PC. Incluye códigos para vehículos (Jetpack, Tanque, Hydra, coches voladores e indestructibles), dinero y salud infinitos, packs de armas, habilidades especiales, super saltos y trucos de policía y ciudad. Solo hay que introducir las claves en cualquier momento de la partida.',
- 'https://www.vidaextra.com/guias-y-trucos/trucos-de-gta-san-andreas-para-pc',
- 'entretenimiento', 'Videojuegos', 'Alex CD', 'VidaExtra', NULL, 'principiante', TRUE, TRUE,
- 'gta,sanandreas,trucos,codigos,cheats,rockstar,videojuegos,pc,guia,vehiculos,armas,dinero,salud,jetpack,tanque');
-
--- ---------- TECNOLOGÍA / UTILIDADES Y SOFTWARE ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Ninite',
- 'Instalador y actualizador masivo de programas para Windows. Permite seleccionar múltiples aplicaciones (navegadores, mensajería, multimedia, .NET, Java, diseño, seguridad, compresión, herramientas de desarrollo) y descargarlas e instalarlas todas a la vez sin toolbars ni software no deseado. Mantiene las apps actualizadas automáticamente.',
- 'https://ninite.com/',
- 'tecnologia', 'Utilidades y Software', 'Ninite', 'Ninite', NULL, 'principiante', TRUE, TRUE,
- 'windows,instalador,actualizador,software,utilidades,programas,apps,batch,automatizacion,sinAdware,silencioso,desatendido,gratis'),
-
-(NULL, FALSE,
- 'Ventoy',
- 'Herramienta open source para crear USB de arranque multiboot. Permite copiar múltiples archivos ISO, WIM, IMG, VHD y EFI directamente a la USB y arrancar desde ellos sin formatear ni extraer. Compatible con Windows, Linux, VMware, UEFI y BIOS legacy.',
- 'https://www.ventoy.net/en/index.html',
- 'tecnologia', 'Utilidades y Software', 'Ventoy', 'Ventoy', NULL, 'intermedio', TRUE, TRUE,
- 'usb,multiboot,iso,arranque,booteable,linux,windows,opensource,utilidades,instalacion,rescate,sistemas'),
-
-(NULL, FALSE,
- 'Rufus',
- 'Utilidad gratuita y open source para formatear y crear soportes USB de arranque (pendrives, tarjetas de memoria, etc.). Permite crear medios de instalación desde ISOs arrancables de Windows, Linux y UEFI.',
- 'https://rufus.ie/es/',
- 'tecnologia', 'Utilidades y Software', 'Pete Batard', 'Rufus', NULL, 'intermedio', TRUE, TRUE,
- 'usb,booteable,iso,formateo,arranque,windows,linux,uefi,bios,firmware,opensource,portable,utilidades,instalacion'),
-
-(NULL, FALSE,
- 'OptiProjects',
- 'Proyectos y utilidades para optimizar Windows: backports de navegadores (Brave, Chrome, Firefox, VSCode, Steam) para Win7/8.1/XP, drivers optimizados para Intel iGPU, drivers para Canaimas venezolanas, emulación de tarjeta gráfica por CPU, Hiren''s Boot.',
- 'https://optijuegos.net/',
- 'tecnologia', 'Optimizacion Windows', 'OptiProjects', 'OptiProjects', NULL, 'avanzado', TRUE, TRUE,
- 'windows,optimizacion,backport,drivers,winxp,win7,win8,navegadores,steam,vscode,hirens,utilidades,software,legacy,pcretr,canaimas'),
-
-(NULL, FALSE,
- '4Download',
- 'Directorio de software para Windows, macOS y Linux. Incluye aplicaciones de productividad, edición multimedia, diseño gráfico, desarrollo, librerías de audio (KONTAKT, VST), plugins y utilidades.',
- 'https://4download.net/',
- 'tecnologia', 'Directorio Software', '4Download', '4Download', NULL, 'principiante', FALSE, TRUE,
- 'software,descargas,windows,macos,linux,plugins,audio,produccion,edicion,diseño,desarrollo,utilidades,directorio'),
-
-(NULL, FALSE,
- 'Technical.city',
- 'Comparaciones, especificaciones y ranking de tarjetas gráficas y procesadores. Incluye benchmarks, comparativas detalladas de GPUs y CPUs de sobremesa, móviles y profesionales, con las novedades más recientes.',
- 'https://technical.city/es',
- 'tecnologia', 'Hardware', 'Technical.city', 'Technical.city', NULL, 'avanzado', TRUE, TRUE,
- 'hardware,gpu,cpu,tarjetasgraficas,procesadores,benchmark,comparativas,ranking,especificaciones,amd,intel,nvidia,pc,gaming'),
-
-(NULL, FALSE,
- 'iFixit en Español',
- 'Comunidad y plataforma gratuita de reparación de dispositivos electrónicos. Ofrece miles de guías paso a paso, tutoriales con imágenes y videos, herramientas y foros para reparar celulares, laptops, tablets, consolas y electrodomésticos.',
- 'https://es.ifixit.com/',
- 'tecnologia', 'Reparación y Hardware', 'iFixit', 'iFixit', NULL, 'principiante', TRUE, TRUE,
- 'reparacion,hardware,electronica,guias,tutoriales,diy,celulares,laptops,derechoareparar,sostenibilidad'),
-
-(NULL, FALSE,
- 'Alpha Coders - Code Wallpapers',
- 'Colección gratuita de más de 70 fondos de pantalla en HD y 4K con temática de programación y código. Incluye wallpapers de lenguajes como Python, JavaScript, binario, terminales y tecnología. Descarga en múltiples resoluciones hasta 7680x4320.',
- 'https://alphacoders.com/code-wallpapers',
- 'tecnologia', 'Fondos de Pantalla', 'Alpha Coders', 'Alpha Coders', NULL, 'principiante', FALSE, TRUE,
- 'wallpapers,fondos,pantalla,hd,4k,codigo,programacion,python,javascript,tecnologia,desarrollo');
-
--- ---------- DESARROLLO / HERRAMIENTAS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Geode SDK',
- 'Mod loader y SDK de código abierto para crear mods en Geometry Dash. Permite cargar mods, añadir hooks, eventos y APIs personalizadas. Incluye documentación, ejemplos, plantillas y una comunidad activa de desarrolladores para extender el juego.',
- 'https://geode-sdk.org/',
- 'desarrollo', 'Modding y Herramientas', 'Geode Team', 'Geode SDK', NULL, 'intermedio', TRUE, TRUE,
- 'geode,sdk,modloader,geometrydash,mods,desarrollo,opensource,cpp,hooks,api,juegos,plantillas');
-
--- ---------- DISEÑO / HERRAMIENTAS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Figma',
- 'Herramienta de diseño de interfaces y prototipado colaborativo basada en la nube. Permite crear diseños de UI/UX, prototipos interactivos, sistemas de diseño y trabajar en equipo en tiempo real. Incluye versión gratuita con proyectos ilimitados, plugins y recursos de la comunidad.',
- 'https://www.figma.com/',
- 'diseno', 'Diseno de Interfaces', 'Figma', 'Figma', NULL, 'principiante', TRUE, TRUE,
- 'figma,diseño,ui,ux,prototipado,colaborativo,interfaces,web,movil,sistemasdediseno,plugins,tiemporeal,gratis'),
-
-(NULL, FALSE,
- 'Photopea',
- 'Editor de imágenes y gráficos online gratuito que funciona directamente en el navegador. Compatible con archivos PSD, XCF, Sketch, XD y CDR, además de formatos comunes como PNG, JPG, GIF y SVG. Alternativa gratuita a Photoshop con capas, máscaras y filtros.',
- 'https://www.photopea.com/',
- 'diseno', 'Edicion de Imagenes', 'Ivan Kutskir', 'Photopea', NULL, 'principiante', TRUE, TRUE,
- 'diseno,edicion,imagenes,photoshop,psd,editor,graficos,online,gratis,capas,fotografia,recursos');
-
--- ---------- INTELIGENCIA ARTIFICIAL - HERRAMIENTAS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Pippit AI',
- 'Agente creativo de inteligencia artificial para crear videos, imágenes, avatares digitales y posters. Convierte enlaces, archivos o material en videos con relación de aspecto y duración personalizables. Incluye generación de imágenes, eliminación de fondos, avatares digitales y animación de fotos estáticas. Ideal para creadores, marketers, empresas y educadores.',
- 'https://www.pippit.ai/',
- 'inteligencia-artificial', 'Herramientas IA', 'Pippit', 'Pippit AI', NULL, 'principiante', TRUE, TRUE,
- 'ia,inteligenciaartificial,video,imagenes,avatares,digitales,marketing,creacion,contenido,posters,edicion,herramientas,gratis'),
-
-(NULL, FALSE,
- 'Toolify.ai',
- 'Directorio con más de 10,000 herramientas de Inteligencia Artificial organizadas por categorías. Incluye generadores de imágenes, video, audio, texto, asistentes, agentes, automatización, marketing, productividad, diseño, código y mucho más.',
- 'https://www.toolify.ai/',
- 'inteligencia-artificial', 'Directorio IA', 'Toolify', 'Toolify.ai', NULL, 'principiante', TRUE, TRUE,
- 'ia,inteligenciaartificial,herramientas,ai,tools,directorio,chatgpt,gpt,imagenes,video,audio,texto,automatizacion,productividad'),
-
-(NULL, FALSE,
- 'OpenCode',
- 'Agente de programación con IA open source para terminal, IDE o escritorio. Soporta +75 proveedores de LLM (Claude, GPT, Gemini, modelos locales), carga automática de LSP, múltiples sesiones paralelas, enlaces compartibles, integración con GitHub Copilot.',
- 'https://opencode.ai/',
- 'inteligencia-artificial', 'Herramientas IA', 'OpenCode', 'OpenCode', NULL, 'intermedio', TRUE, TRUE,
- 'ia,inteligenciaartificial,programacion,codigo,agente,opensource,terminal,ide,claude,gpt,gemini,copilot,desarrollo,llm');
-
--- ---------- IA - ASISTENTES ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'ChatGPT',
- 'Asistente de inteligencia artificial desarrollado por OpenAI. Permite conversar, generar texto, programar, analizar imágenes, crear contenido y resolver problemas. Ofrece versión gratuita y planes de pago con modelos avanzados como GPT-4o.',
- 'https://chatgpt.com/',
- 'inteligencia-artificial', 'Asistentes IA', 'OpenAI', 'ChatGPT', NULL, 'principiante', TRUE, TRUE,
- 'ia,chatbot,asistente,openai,chatgpt,gpt4,texto,codigo,imagenes,gratis,llm'),
-
-(NULL, FALSE,
- 'Google Gemini',
- 'Asistente de inteligencia artificial multimodal desarrollado por Google. Integrado con servicios como Gmail, Docs y YouTube. Capaz de procesar texto, imágenes, audio y video. Ofrece versión gratuita y planes avanzados con Gemini Pro y Ultra.',
- 'https://gemini.google.com/app',
- 'inteligencia-artificial', 'Asistentes IA', 'Google', 'Gemini', NULL, 'principiante', TRUE, TRUE,
- 'ia,chatbot,asistente,google,gemini,multimodal,texto,imagenes,audio,video,gratis,llm'),
-
-(NULL, FALSE,
- 'Claude',
- 'Asistente de inteligencia artificial desarrollado por Anthropic. Destacado por su capacidad de razonamiento, análisis de documentos extensos y conversaciones naturales. Modelo enfocado en seguridad y alineación.',
- 'https://claude.ai/new',
- 'inteligencia-artificial', 'Asistentes IA', 'Anthropic', 'Claude', NULL, 'principiante', TRUE, TRUE,
- 'ia,chatbot,asistente,anthropic,claude,razonamiento,documentos,codigo,gratis,llm'),
-
-(NULL, FALSE,
- 'DeepSeek',
- 'Asistente de inteligencia artificial gratuito desarrollado por DeepSeek. Capaz de responder preguntas, generar texto, programar, analizar documentos y razonar sobre problemas complejos. Modelo open source con excelente rendimiento en matemáticas y código.',
- 'https://www.deepseek.com/en/',
- 'inteligencia-artificial', 'Asistentes IA', 'DeepSeek', 'DeepSeek', NULL, 'principiante', TRUE, TRUE,
- 'ia,chatbot,asistente,deepseek,openSource,codigo,matematicas,gratis,razonamiento,llm'),
-
-(NULL, FALSE,
- 'Microsoft Copilot',
- 'Asistente de inteligencia artificial desarrollado por Microsoft basado en modelos GPT. Integrado con Windows, Edge, Bing y Microsoft 365. Capaz de generar texto, imágenes, código y responder consultas en tiempo real con acceso a internet.',
- 'https://copilot.microsoft.com/',
- 'inteligencia-artificial', 'Asistentes IA', 'Microsoft', 'Copilot', NULL, 'principiante', TRUE, TRUE,
- 'ia,chatbot,asistente,microsoft,copilot,windows,bing,edge,texto,imagenes,codigo,gratis,llm'),
-
-(NULL, FALSE,
- 'Qwen Chat',
- 'Asistente de inteligencia artificial desarrollado por Alibaba Cloud. Modelo multimodal capaz de generar texto, código, imágenes y razonar sobre problemas complejos. Disponible en versión web y app, con planes gratuitos y de pago.',
- 'https://chat.qwen.ai/',
- 'inteligencia-artificial', 'Asistentes IA', 'Alibaba Cloud', 'Qwen', NULL, 'principiante', TRUE, TRUE,
- 'ia,chatbot,asistente,qwen,alibaba,multimodal,codigo,texto,imagenes,gratis,llm'),
-
-(NULL, FALSE,
- 'Kimi',
- 'Asistente de inteligencia artificial desarrollado por Moonshot AI. Especializado en el procesamiento de contextos muy largos, capaz de analizar documentos extensos, libros y conversaciones prolongadas. Disponible en web y app, con versión gratuita.',
- 'https://www.kimi.ai/es-419',
- 'inteligencia-artificial', 'Asistentes IA', 'Moonshot AI', 'Kimi', NULL, 'principiante', FALSE, TRUE,
- 'ia,chatbot,asistente,kimi,moonshot,contextolargo,documentos,texto,gratis,llm'),
-
-(NULL, FALSE,
- 'Grok',
- 'Asistente de inteligencia artificial desarrollado por xAI (Elon Musk). Integrado con la red social X (Twitter), con acceso a información en tiempo real. Capaz de generar texto, imágenes y razonar con un estilo más desenfadado.',
- 'https://grok.com/',
- 'inteligencia-artificial', 'Asistentes IA', 'xAI', 'Grok', NULL, 'principiante', FALSE, TRUE,
- 'ia,chatbot,asistente,xai,grok,elonmusk,twitter,x,tiemporeal,texto,imagenes,llm');
-
--- ---------- IA - BUSCADORES ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Perplexity AI',
- 'Motor de búsqueda conversacional con inteligencia artificial. Responde preguntas citando fuentes en tiempo real de la web. Ideal para investigación, estudio y verificación de información. Ofrece versión gratuita y planes Pro.',
- 'https://www.perplexity.ai/',
- 'inteligencia-artificial', 'Buscadores IA', 'Perplexity AI', 'Perplexity', NULL, 'principiante', TRUE, TRUE,
- 'ia,buscador,investigacion,perplexity,fuentes,tiemporeal,estudio,texto,gratis,llm'),
-
-(NULL, FALSE,
- 'Gemini Notebook (NotebookLM)',
- 'Asistente de investigación basado en IA desarrollado por Google. Permite subir documentos, notas y fuentes propias para generar resúmenes, mapas mentales, cuestionarios, tarjetas didácticas y resúmenes de audio en formato pódcast.',
- 'https://notebook.google/?hl=es',
- 'inteligencia-artificial', 'Investigacion y Estudio', 'Google', 'Gemini Notebook', NULL, 'intermedio', TRUE, TRUE,
- 'ia,investigacion,estudio,notas,gemini,google,notebooklm,resumenes,mapasmentales,cuestionarios,podcast,documentos,productividad');
-
--- ---------- EDUCACIÓN / CURSOS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Class Central',
- 'Buscador gratuito de cursos online (MOOCs) de las mejores universidades y plataformas del mundo como Coursera, edX, Udemy, FutureLearn y Khan Academy. Permite filtrar por tema, universidad, idioma, nivel, duración y certificación. Incluye reseñas de usuarios.',
- 'https://www.classcentral.com/',
- 'educacion', 'Cursos Online', 'Class Central', 'Class Central', NULL, 'principiante', TRUE, TRUE,
- 'cursos,mooc,educacion,online,coursera,edx,udemy,universidades,certificados,aprendizaje,gratis,buscador'),
-
-(NULL, FALSE,
- 'SQL - Curso completo gratis',
- 'Curso completo de SQL gratuito. Aprende desde cero a consultar, filtrar, ordenar y manipular bases de datos relacionales. Incluye certificación al finalizar.',
- 'https://www.aprendesql.dev/',
- 'educacion', 'Bases de Datos', 'AprendeSQL.dev', 'AprendeSQL.dev', '30h', 'principiante', TRUE, TRUE,
- 'sql,basesdedatos,curso,certificacion,gratis'),
-
-(NULL, FALSE,
- 'Power BI - Introducción',
- 'Curso gratuito de introducción a Power BI. Aprende a crear dashboards, visualizaciones y análisis de datos con la herramienta de Business Intelligence de Microsoft. Incluye certificación.',
- 'https://capacitacionlaboral.trabajo.gob.pe/cursos/introduccion-al-power-bi/',
- 'educacion', 'Business Intelligence', 'Ministerio de Trabajo', 'Capacitacion Laboral', '20h', 'principiante', TRUE, TRUE,
- 'powerbi,bi,businessintelligence,datos,dashboards,certificacion,gratis'),
-
-(NULL, FALSE,
- 'Inglés A2 para desarrolladores',
- 'Curso de inglés nivel A2 orientado a desarrolladores. Aprende vocabulario técnico, comprensión lectora y comunicación básica en el ámbito tecnológico. Incluye certificación.',
- 'http://midu.link/ingles-a2',
- 'educacion', 'Idiomas', 'freeCodeCamp.org', 'freeCodeCamp.org', '40h', 'principiante', TRUE, TRUE,
- 'ingles,a2,idiomas,desarrolladores,freecodecamp,certificacion'),
-
-(NULL, FALSE,
- 'Gemini para estudiantes',
- 'Certificación de Gemini para estudiantes. Aprende a usar IA (Gemini y NotebookLM) de forma responsable para potenciar tu aprendizaje y creatividad. Otorgada por Google.',
- 'https://edu.exceedlms.com/student/path/1825254-certificacion-de-gemini-para-estudiantes',
- 'educacion', 'Inteligencia Artificial', 'Google', 'Exceed LMS', NULL, 'principiante', TRUE, TRUE,
- 'gemini,ia,inteligenciaartificial,google,certificacion,estudiantes'),
-
-(NULL, FALSE,
- 'Python Fundamentals for Beginners',
- 'Curso gratuito de fundamentos de Python para principiantes. Aprende desde cero los conceptos básicos del lenguaje, estructuras de control, funciones y más.',
- 'https://www.mygreatlearning.com/academy/learn-for-free/courses/python-fundamentals-for-beginners',
- 'educacion', 'Programación', 'Great Learning', 'Great Learning Academy', NULL, 'principiante', TRUE, TRUE,
- 'python,programacion,principiante,fundamentos,curso,gratis'),
-
-(NULL, FALSE,
- 'NB Chemical Experiments (NoBook Chemistry)',
- 'Plataforma de simulaciones interactivas de laboratorio de química. Incluye más de 30 experimentos virtuales como titulación ácido-base, combustión del metano, electrólisis, filtrado, destilación, reacciones redox, obtención de gases (O₂, Cl₂), etc.',
- 'https://singapore-chemistry.nobook.com/#/console/templates/resource',
- 'educacion', 'Quimica', 'NoBook', 'NoBook Chemistry', NULL, 'intermedio', TRUE, TRUE,
- 'quimica,laboratorio,simulacion,experimentos,educacion,ciencia,titulacion,electrolisis,reacciones,gases,estudiantes,docentes,interactivo');
-
--- ---------- CIBERSEGURIDAD ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Hack The Box',
- 'Plataforma de ciberseguridad para practicar hacking ético y pentesting mediante laboratorios y máquinas virtuales vulnerables. Incluye retos, challenges, academias y competiciones CTF. Ideal para aprender seguridad ofensiva desde principiante hasta avanzado.',
- 'https://www.hackthebox.com/',
- 'ciberseguridad', 'Hacking Ético', 'Hack The Box', 'Hack The Box', NULL, 'principiante', TRUE, TRUE,
- 'ciberseguridad,hacking,pentesting,ctf,laboratorios,seguridad,ofensiva,ethicalhacking,maquinas,retos'),
-
-(NULL, FALSE,
- 'Ethical Hacker - Cisco NetAcad',
- 'Curso oficial de Cisco Networking Academy sobre hacking ético y ciberseguridad. Aprende a identificar vulnerabilidades, realizar pruebas de penetración, análisis de amenazas y defender sistemas de forma legal y ética.',
- 'https://www.netacad.com/courses/ethical-hacker?courseLang=en-US',
- 'ciberseguridad', 'Hacking Ético', 'Cisco Networking Academy', 'Cisco NetAcad', NULL, 'intermedio', TRUE, TRUE,
- 'ciberseguridad,hacking,etico,ethicalhacker,cisco,netacad,seguridad,penetracion,certificacion,redes,informatica'),
-
-(NULL, FALSE,
- 'TryHackMe - Pre Security Path',
- 'Ruta de aprendizaje gratuita de TryHackMe diseñada para principiantes absolutos en ciberseguridad. Cubre los fundamentos de redes, Linux, Windows, herramientas de hacking, criptografía y seguridad web. Ideal como primer paso antes de rutas más avanzadas.',
- 'https://tryhackme.com/path/outline/presecurity',
- 'ciberseguridad', 'Hacking Ético', 'TryHackMe', 'TryHackMe', '~30h', 'principiante', TRUE, TRUE,
- 'ciberseguridad,hacking,etico,tryhackme,presecurity,principiante,redes,linux,seguridad,pentesting,free');
-
--- ---------- ENTRETENIMIENTO - DEPORTES ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Viper Play TV',
- 'Plataforma gratuita para ver partidos de fútbol en vivo. Incluye la Liga Profesional Argentina, Copa Libertadores, Copa Sudamericana y las ligas más importantes de Europa. Sin registro y sin costo.',
- 'https://viper.pages.dev/',
- 'entretenimiento', 'Deportes', 'Viper Play', 'Viper Play TV', NULL, 'principiante', FALSE, TRUE,
- 'futbol,deportes,envivo,streaming,gratis,libertadores,sudamericana,ligaargentina,europa,partidos'),
-
-(NULL, FALSE,
- 'Roja TV Directa',
- 'Plataforma de streaming deportivo en vivo. Transmite partidos de fútbol y otros eventos deportivos en directo de forma gratuita.',
- 'https://rojatvdirecta.online/',
- 'entretenimiento', 'Deportes', 'Roja TV', 'Roja TV Directa', NULL, 'principiante', FALSE, TRUE,
- 'futbol,deportes,envivo,streaming,gratis,partidos,roja,tv,directo'),
-
-(NULL, FALSE,
- 'Futbol Libre TV Directa',
- 'Plataforma de streaming deportivo en vivo. Transmite partidos de fútbol y otros eventos deportivos en directo de forma gratuita.',
- 'https://futbollibrefullhd.org/',
- 'entretenimiento', 'Deportes', 'Futbol libre', 'futbol Directa', NULL, 'principiante', FALSE, TRUE,
- 'futbol,deportes,envivo,streaming,gratis,partidos,directo');
-
--- ---------- ENTRETENIMIENTO - FONDOS DE PANTALLA ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'WallpaperCave',
- 'Plataforma gratuita con una enorme colección de fondos de pantalla en alta definición para PC, celulares y tablets. Organizados por categorías como anime, videojuegos, películas, deportes, naturaleza, autos y más. Descarga directa sin registro.',
- 'https://wallpapercave.com/',
- 'entretenimiento', 'Fondos de Pantalla', 'WallpaperCave', 'WallpaperCave', NULL, 'principiante', FALSE, TRUE,
- 'wallpapers,fondos,pantalla,hd,4k,anime,videojuegos,peliculas,descargas,gratis'),
-
-(NULL, FALSE,
- 'Wallpaper Mobi',
- 'Plataforma gratuita con una amplia colección de fondos de pantalla para celulares y tablets. Organizados por categorías como anime, videojuegos, autos, naturaleza, abstractos, deportes y más. Descarga directa en distintas resoluciones.',
- 'https://wallpaper.mob.org/',
- 'entretenimiento', 'Fondos de Pantalla', 'Mob.org', 'Wallpaper Mobi', NULL, 'principiante', FALSE, TRUE,
- 'wallpapers,fondos,pantalla,movil,celular,hd,anime,videojuegos,autos,naturaleza,descargas,gratis'),
-
-(NULL, FALSE,
- 'MoeWalls',
- 'Plataforma gratuita de fondos de pantalla animados (live wallpapers) en HD y 4K para PC y dispositivos móviles. Incluye categorías como anime, naturaleza, abstractos, videojuegos, películas, animales y más. Compatible con Wallpaper Engine.',
- 'https://moewalls.com/',
- 'entretenimiento', 'Fondos de Pantalla', 'MoeWalls', 'MoeWalls', NULL, 'principiante', FALSE, TRUE,
- 'wallpapers,fondos,pantalla,animados,livewallpaper,hd,4k,anime,naturaleza,videojuegos,wallpaperengine,descargas,gratis');
-
--- ---------- ENTRETENIMIENTO - ANIME Y VIDEOJUEGOS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Kawaii Animes',
- 'Aplicación oficial para ver anime en línea. Versión completa sin restricciones con todas las características. Apoya el anime legal y promueve el respeto hacia los creadores y la industria.',
- 'https://www.kawaiianimes.app/',
- 'entretenimiento', 'Anime', 'Kawaii Animes', 'Kawaii Animes', NULL, 'principiante', FALSE, TRUE,
- 'anime,kawaii,entretenimiento,streaming,peliculas,series,japones,otaku,ver,online,app'),
-
-(NULL, FALSE,
- 'Minecraft Wiki',
- 'La comunidad hispana más grande que recopila información sobre la franquicia de Minecraft. Incluye guías, tutoriales, bloques, criaturas, biomas, actualizaciones y todo lo que necesitas saber sobre el juego. Más de 5677 artículos actualizados.',
- 'https://es.minecraft.wiki/',
- 'entretenimiento', 'Videojuegos', 'Comunidad Minecraft Wiki', 'Minecraft Wiki', NULL, 'principiante', FALSE, TRUE,
- 'minecraft,juego,videojuegos,wiki,guia,tutorial,mojang,sandbox,aventura'),
-
-(NULL, FALSE,
- 'MinecraftSearch',
- 'Buscador avanzado de Minecraft con más de 2000 objetos, criaturas, bloques, biomas y estructuras. Incluye recetas de crafteo, drops, intercambios, estadísticas, mapa de semillas, planificador de encantamientos y soporte para Java 26.3 y Bedrock 1.26.51.',
- 'https://minecraftsearch.com/es-ES',
- 'entretenimiento', 'Videojuegos', 'MinecraftSearch', 'MinecraftSearch', NULL, 'principiante', FALSE, TRUE,
- 'minecraft,juego,videojuegos,buscador,herramienta,recetas,crafteo,semillas,encantamientos,biomas,java,bedrock'),
-
-(NULL, FALSE,
- 'Friv Legend',
- 'Colección clásica de juegos Friv en su menú antiguo. Incluye cientos de minijuegos Flash retro: aventuras, puzzles, deportes, acción y más. Ideal para jugar en PC de escritorio con teclado y ratón. La experiencia nostálgica original de Friv.',
- 'https://www.frivlegend.com/',
- 'entretenimiento', 'Juegos Flash Retro', 'Friv', 'Friv Legend', NULL, 'principiante', FALSE, TRUE,
- 'friv,juegos,flash,retro,minijuegos,nostalgia,puzzles,aventuras,deportes,accion,clasicos,navegador');
-
--- ---------- HERRAMIENTAS / RECURSOS ----------
-INSERT INTO recursos_biblioteca
-    (usuario_id, es_usuario, titulo, descripcion, url, categoria, subcategoria,
-     autor, plataforma, duracion, nivel, destacado, activo, tags)
-VALUES
-(NULL, FALSE,
- 'Flores Amarillas',
- 'Recurso interactivo sobre flores amarillas. Incluye información, imágenes, tutoriales y contenido relacionado con esta temática.',
- 'https://encoded.pe/floresamarillas/',
- 'recurso', 'Educativo', 'Encoded', 'Encoded.pe', NULL, 'principiante', FALSE, TRUE,
- 'floresamarillas,flores,educativo,recurso,encoded'),
-
-(NULL, FALSE,
- 'Yapaitas (antes Rebajitas)',
- 'Comparador de precios peruano gratuito. Busca un producto al mismo tiempo en varias tiendas peruanas para mostrar quién lo tiene más barato antes de comprar. Incluye seguimiento de evolución de precios, filtros por tienda.',
- 'https://rebajitas.com/',
- 'herramienta', 'Comparador de Precios', 'Yapaitas', 'Yapaitas', NULL, 'principiante', FALSE, TRUE,
- 'comparador,precios,peru,compras,ofertas,tiendas,ahorro,yapaitas,rebajitas,herramienta,gratis'),
-
-(NULL, FALSE,
- 'it''s free*',
- 'Directorio bilingüe (español/inglés) con 116 herramientas y servicios que ofrecen capas gratuitas realmente útiles para developers, makers y equipos pequeños. Incluye 14 categorías como backend, bases de datos, IA, auth, email, monitorización, CI/CD, analítica, diseño, CMS y APIs.',
- 'https://itsfree.dev/es',
- 'herramienta', 'Directorio de Herramientas', 'it''s free*', 'it''s free*', NULL, 'intermedio', TRUE, TRUE,
- 'herramientas,developers,free,recursos,directorio,backend,basededatos,ia,auth,email,monitorizacion,cicd,analitica,diseño,cms,apis,gratis,opensource');
-
--- ============================================================
--- BLOQUE 16: VERIFICACIÓN FINAL
--- ============================================================
-
-SELECT '✅ Recursos de biblioteca insertados:' AS info;
-SELECT COUNT(*) AS total FROM recursos_biblioteca WHERE activo = TRUE;
-
-SELECT '✅ Recursos por categoría:' AS info;
-SELECT categoria, COUNT(*) AS total
-FROM recursos_biblioteca
-WHERE activo = TRUE
-GROUP BY categoria
-ORDER BY total DESC;
-
-SELECT '✅ CEO creado:' AS info;
-SELECT id, nombre_usuario, email, rol FROM usuarios WHERE rol = 'CEO';
 
 -- ============================================================
 -- FIN DEL SCRIPT
