@@ -1,0 +1,12 @@
+-- ============================================================
+-- FIX: Añadir fecha_actualizacion a reacciones
+-- ============================================================
+USE kiert_db;
+
+ALTER TABLE reacciones
+    ADD COLUMN fecha_actualizacion TIMESTAMP NULL DEFAULT NULL
+    ON UPDATE CURRENT_TIMESTAMP
+    AFTER fecha_creacion;
+
+-- Verificar
+SHOW COLUMNS FROM reacciones LIKE 'fecha_actualizacion';
